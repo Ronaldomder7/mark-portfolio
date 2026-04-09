@@ -13,15 +13,8 @@ export const SCAN_SOURCES = [
     name: "daily-log",
     path: `${OBSIDIAN_ROOT}/25岁的马克的人生地图/每日发现日志/2026`,
     strategy: "sections",
-    sectionLevels: [2, 3],
-    sections: [
-      "今天的认知变化",
-      "今天最重要的一件事",
-      "一个待解决的问题",
-      "灵感闪现",
-      "今日思考",
-      "每日金句",
-    ],
+    sectionLevels: [3],
+    sections: ["今天的认知变化"],
     timeWindow: 30,
   },
   // coach source removed: content is AI-generated analysis of Mark, not Mark's own words.
@@ -31,7 +24,7 @@ export const SCAN_SOURCES = [
     strategy: "whitelist-then-sections",
     sectionLevels: [2, 3],
     filenameWhitelist: [
-      "规划", "复盘", "反思", "思考", "成长", "教练",
+      "规划", "复盘", "反思", "思考", "成长",
       "选题", "策划", "拆素材", "搭框架", "找故事",
       "萃取", "洞察", "口播", "脚本", "文章", "稿件", "稿子",
       "小红书", "公众号", "视频号", "AI真探马克", "自媒体",
@@ -39,11 +32,9 @@ export const SCAN_SOURCES = [
     filenameBlacklist: [
       "日常产出", "批量", "产出_0", "续接", "迭代", "文案缝合",
       "提示词", "Skill", "搭建", "配置", "调试", "工具", "API",
+      "教练",
     ],
-    sections: [
-      "认知突破", "核心洞察", "思维纹理", "马克的",
-      "今天的认知变化", "灵感闪现", "今日思考",
-    ],
+    sections: ["今天的认知变化", "认知突破"],
     timeWindow: 30,
   },
 ];
