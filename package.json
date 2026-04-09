@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync": "node scripts/scan.mjs",
+    "publish": "node scripts/publish.mjs"
   },
   "dependencies": {
     "next": "16.2.3",
