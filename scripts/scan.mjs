@@ -59,7 +59,7 @@ function scanSections(source) {
     const date = dateFromFilename(path.basename(file));
     if (!date) continue;
     const content = fs.readFileSync(file, "utf-8");
-    const sections = extractSections(content, source.sections);
+    const sections = extractSections(content, source.sections, { levels: source.sectionLevels || [2] });
     for (const s of sections) {
       results.push({
         date,
@@ -82,7 +82,7 @@ function scanWhitelistThenSections(source) {
     const date = dateFromFilename(fn);
     if (!date) continue;
     const content = fs.readFileSync(file, "utf-8");
-    const sections = extractSections(content, source.sections);
+    const sections = extractSections(content, source.sections, { levels: source.sectionLevels || [2] });
     for (const s of sections) {
       results.push({
         date,
