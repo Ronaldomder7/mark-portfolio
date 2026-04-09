@@ -20,9 +20,11 @@ export default function RecentThinking() {
               <div className="font-sans text-xs text-muted tracking-wide mb-3">
                 {item.date} · {item.source}
               </div>
-              <p className="font-serif text-base text-ink leading-loose">
-                {item.text}
-              </p>
+              <div className="font-serif text-base text-ink leading-loose space-y-4">
+                {item.text.split("\n\n").map((para, j) => (
+                  <p key={j}>{para}</p>
+                ))}
+              </div>
             </li>
           ))}
         </ul>
