@@ -13,6 +13,7 @@ import { shouldScanFilename } from "./parsers/whitelist.mjs";
 import { stripHtmlComments } from "./strip.mjs";
 import { stripAIAnnotations } from "./stripAI.mjs";
 import { isMeaningful } from "./meaningful.mjs";
+import { parseFlomoBody } from "./parsers/flomoBody.mjs";
 
 function walkDir(dir, recurse = true) {
   if (!fs.existsSync(dir)) return [];
@@ -49,10 +50,13 @@ function scanFullFile(source) {
       const date = dateFromFilename(path.basename(file));
       if (!date) return null;
       const rawContent = fs.readFileSync(file, "utf-8");
-      const content = stripAIAnnotations(stripHtmlComments(rawContent));
+      const parsed =
+        source.name === "flomo" ? parseFlomoBody(rawContent) : rawContent;
+      const content = stripAIAnnotations(stripHtmlComments(parsed));
       if (!content) return null;
       if (!isMeaningful(content)) return null;
-      return { date, source: source.name, text: truncate(content) };
+      const limit = source.name === "flomo" ? 400 : 200;
+      return { date, source: source.name, text: truncate(content, limit) };
     })
     .filter(Boolean);
 }
