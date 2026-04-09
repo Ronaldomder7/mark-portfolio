@@ -11,6 +11,7 @@ import { filterByTimeWindow } from "./timeWindow.mjs";
 import { extractSections } from "./parsers/sections.mjs";
 import { shouldScanFilename } from "./parsers/whitelist.mjs";
 import { stripHtmlComments } from "./strip.mjs";
+import { isMeaningful } from "./meaningful.mjs";
 
 function walkDir(dir, recurse = true) {
   if (!fs.existsSync(dir)) return [];
@@ -49,6 +50,7 @@ function scanFullFile(source) {
       const rawContent = fs.readFileSync(file, "utf-8");
       const content = stripHtmlComments(rawContent);
       if (!content) return null;
+      if (!isMeaningful(content)) return null;
       return { date, source: source.name, text: truncate(content) };
     })
     .filter(Boolean);
@@ -65,6 +67,7 @@ function scanSections(source) {
     for (const s of sections) {
       const cleaned = stripHtmlComments(s.body);
       if (!cleaned) continue;
+      if (!isMeaningful(cleaned)) continue;
       results.push({
         date,
         source: `${source.name} · ${s.section}`,
@@ -90,6 +93,7 @@ function scanWhitelistThenSections(source) {
     for (const s of sections) {
       const cleaned = stripHtmlComments(s.body);
       if (!cleaned) continue;
+      if (!isMeaningful(cleaned)) continue;
       results.push({
         date,
         source: `${source.name} · ${s.section}`,
