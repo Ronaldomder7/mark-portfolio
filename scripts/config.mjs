@@ -7,6 +7,7 @@ export const SCAN_SOURCES = [
     name: "flomo",
     path: `${OBSIDIAN_ROOT}/25岁的马克的人生地图/每日发现日志/flomo`,
     strategy: "fullFile",
+    timeWindow: null, // scan all flomo, no time limit (timeless personal notes)
   },
   {
     name: "daily-log",
@@ -21,20 +22,9 @@ export const SCAN_SOURCES = [
       "今日思考",
       "每日金句",
     ],
+    timeWindow: 30,
   },
-  {
-    name: "coach",
-    path: `${OBSIDIAN_ROOT}/OpenClaw对话存档/成长教练`,
-    strategy: "sections",
-    sectionLevels: [2],
-    sections: [
-      "教练观察",
-      "元能力触发",
-      "认知变化",
-      "认知突破",
-      "核心洞察",
-    ],
-  },
+  // coach source removed: content is AI-generated analysis of Mark, not Mark's own words.
   {
     name: "claude-archive",
     path: `${OBSIDIAN_ROOT}/Claude对话存档`,
@@ -54,6 +44,7 @@ export const SCAN_SOURCES = [
       "认知突破", "核心洞察", "思维纹理", "马克的",
       "今天的认知变化", "灵感闪现", "今日思考",
     ],
+    timeWindow: 30,
   },
 ];
 

@@ -11,6 +11,7 @@ import { filterByTimeWindow } from "./timeWindow.mjs";
 import { extractSections } from "./parsers/sections.mjs";
 import { shouldScanFilename } from "./parsers/whitelist.mjs";
 import { stripHtmlComments } from "./strip.mjs";
+import { stripAIAnnotations } from "./stripAI.mjs";
 import { isMeaningful } from "./meaningful.mjs";
 
 function walkDir(dir, recurse = true) {
@@ -48,7 +49,7 @@ function scanFullFile(source) {
       const date = dateFromFilename(path.basename(file));
       if (!date) return null;
       const rawContent = fs.readFileSync(file, "utf-8");
-      const content = stripHtmlComments(rawContent);
+      const content = stripAIAnnotations(stripHtmlComments(rawContent));
       if (!content) return null;
       if (!isMeaningful(content)) return null;
       return { date, source: source.name, text: truncate(content) };
@@ -65,7 +66,7 @@ function scanSections(source) {
     const content = fs.readFileSync(file, "utf-8");
     const sections = extractSections(content, source.sections, { levels: source.sectionLevels || [2] });
     for (const s of sections) {
-      const cleaned = stripHtmlComments(s.body);
+      const cleaned = stripAIAnnotations(stripHtmlComments(s.body));
       if (!cleaned) continue;
       if (!isMeaningful(cleaned)) continue;
       results.push({
@@ -91,7 +92,7 @@ function scanWhitelistThenSections(source) {
     const content = fs.readFileSync(file, "utf-8");
     const sections = extractSections(content, source.sections, { levels: source.sectionLevels || [2] });
     for (const s of sections) {
-      const cleaned = stripHtmlComments(s.body);
+      const cleaned = stripAIAnnotations(stripHtmlComments(s.body));
       if (!cleaned) continue;
       if (!isMeaningful(cleaned)) continue;
       results.push({
@@ -115,14 +116,19 @@ function main() {
     else if (source.strategy === "sections") items = scanSections(source);
     else if (source.strategy === "whitelist-then-sections")
       items = scanWhitelistThenSections(source);
-    console.log(`    抓到 ${items.length} 条`);
+    const before = items.length;
+    const window =
+      source.timeWindow === undefined ? TIME_WINDOW_DAYS : source.timeWindow;
+    if (window !== null) {
+      items = filterByTimeWindow(items, window);
+    }
+    console.log(
+      `    抓到 ${before} 条 → 时间窗 ${window === null ? "∞" : window + "天"}: ${items.length} 条`
+    );
     all.push(...items);
   }
 
   console.log(`\n合计 ${all.length} 条候选`);
-
-  all = filterByTimeWindow(all, TIME_WINDOW_DAYS);
-  console.log(`时间窗口过滤后 (${TIME_WINDOW_DAYS} 天): ${all.length} 条`);
 
   all = filterByBannedKeywords(all, BANNED_KEYWORDS);
   console.log(`禁区词过滤后: ${all.length} 条`);
