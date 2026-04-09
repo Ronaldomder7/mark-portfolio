@@ -36,17 +36,6 @@ export const SCAN_SOURCES = [
     ],
   },
   {
-    name: "content-engine",
-    path: `${OBSIDIAN_ROOT}/OpenClaw对话存档/内容引擎专家`,
-    strategy: "sections",
-    sectionLevels: [2],
-    sections: [
-      "核心洞察",
-      "对马克",
-      "马克的",
-    ],
-  },
-  {
     name: "claude-archive",
     path: `${OBSIDIAN_ROOT}/Claude对话存档`,
     strategy: "whitelist-then-sections",
