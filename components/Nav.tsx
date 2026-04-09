@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { href: "#mind", label: "思想" },
   { href: "#timeline", label: "底色" },
   { href: "#recent", label: "生长" },
+  { href: "#guestbook", label: "留言" },
 ];
 
 export default function Nav() {

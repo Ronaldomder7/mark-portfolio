@@ -6,6 +6,7 @@ import Thoughts from "@/components/Thoughts";
 import SystemCard from "@/components/SystemCard";
 import Timeline from "@/components/Timeline";
 import RecentThinking from "@/components/RecentThinking";
+import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
 
 export default function Home() {
@@ -19,6 +20,7 @@ export default function Home() {
       <SystemCard />
       <Timeline />
       <RecentThinking />
+      <Guestbook />
       <Footer />
     </main>
   );
