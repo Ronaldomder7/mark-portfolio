@@ -129,6 +129,16 @@ function main() {
 
   all.sort((a, b) => b.date.localeCompare(a.date));
 
+  // Dedupe by first 50 chars of normalized text
+  const seen = new Set();
+  all = all.filter((item) => {
+    const key = item.text.replace(/\s+/g, "").slice(0, 50);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  console.log(`去重后: ${all.length} 条`);
+
   if (!fs.existsSync(CANDIDATES_OUTPUT_DIR)) {
     fs.mkdirSync(CANDIDATES_OUTPUT_DIR, { recursive: true });
   }
