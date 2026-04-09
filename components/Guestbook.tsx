@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 
-// Formspree endpoint — Mark needs to create a form at https://formspree.io/
-// and replace this URL with his own.
-const FORMSPREE_ENDPOINT = "https://formspree.io/f/YOUR_FORM_ID";
+const FORMSPREE_ENDPOINT = "https://formspree.io/f/xaqlzalv";
 
 export default function Guestbook() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
