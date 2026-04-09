@@ -10,6 +10,7 @@ import { filterByBannedKeywords } from "./filter.mjs";
 import { filterByTimeWindow } from "./timeWindow.mjs";
 import { extractSections } from "./parsers/sections.mjs";
 import { shouldScanFilename } from "./parsers/whitelist.mjs";
+import { stripHtmlComments } from "./strip.mjs";
 
 function walkDir(dir, recurse = true) {
   if (!fs.existsSync(dir)) return [];
@@ -45,7 +46,8 @@ function scanFullFile(source) {
     .map((file) => {
       const date = dateFromFilename(path.basename(file));
       if (!date) return null;
-      const content = fs.readFileSync(file, "utf-8").trim();
+      const rawContent = fs.readFileSync(file, "utf-8");
+      const content = stripHtmlComments(rawContent);
       if (!content) return null;
       return { date, source: source.name, text: truncate(content) };
     })
@@ -61,10 +63,12 @@ function scanSections(source) {
     const content = fs.readFileSync(file, "utf-8");
     const sections = extractSections(content, source.sections, { levels: source.sectionLevels || [2] });
     for (const s of sections) {
+      const cleaned = stripHtmlComments(s.body);
+      if (!cleaned) continue;
       results.push({
         date,
         source: `${source.name} · ${s.section}`,
-        text: truncate(s.body),
+        text: truncate(cleaned),
       });
     }
   }
@@ -84,10 +88,12 @@ function scanWhitelistThenSections(source) {
     const content = fs.readFileSync(file, "utf-8");
     const sections = extractSections(content, source.sections, { levels: source.sectionLevels || [2] });
     for (const s of sections) {
+      const cleaned = stripHtmlComments(s.body);
+      if (!cleaned) continue;
       results.push({
         date,
         source: `${source.name} · ${s.section}`,
-        text: truncate(s.body),
+        text: truncate(cleaned),
       });
     }
   }
