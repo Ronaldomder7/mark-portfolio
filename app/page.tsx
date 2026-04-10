@@ -8,18 +8,27 @@ import Timeline from "@/components/Timeline";
 import RecentThinking from "@/components/RecentThinking";
 import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
+import ScrollArrow from "@/components/ScrollArrow";
 
 export default function Home() {
   return (
     <main>
       <Nav />
       <Hero />
+      <ScrollArrow to="works" />
       <Works />
-      <Beliefs />
+      <ScrollArrow to="beliefs" />
+      <div id="beliefs">
+        <Beliefs />
+      </div>
+      <ScrollArrow to="mind" />
       <Thoughts />
       <SystemCard />
+      <ScrollArrow to="timeline" />
       <Timeline />
+      <ScrollArrow to="recent" />
       <RecentThinking />
+      <ScrollArrow to="guestbook" />
       <Guestbook />
       <Footer />
     </main>
