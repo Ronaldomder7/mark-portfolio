@@ -7,8 +7,11 @@
   --color-accent: #8B2E2E;
   --color-line: #E8E6E1;
 
-  --font-serif: var(--font-serif), serif;
-  --font-sans: var(--font-sans), sans-serif;
+  /* 系统字体栈：中文系统会用本机的宋体/黑体，无需从 Google Fonts 下载 */
+  --font-serif: "Source Han Serif SC", "Noto Serif CJK SC", "Noto Serif SC",
+    "Songti SC", "SimSun", "STSong", "宋体", ui-serif, Georgia, serif;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑",
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
 
   --max-width-prose: 720px;
 }
@@ -16,7 +19,7 @@
 html, body {
   background-color: #FAFAF8;
   color: #1A1A1A;
-  font-family: var(--font-serif), serif;
+  font-family: var(--font-serif);
   font-feature-settings: "palt";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
