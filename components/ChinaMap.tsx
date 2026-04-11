@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import cities from "@/content/cities.json";
 
@@ -12,27 +12,24 @@ interface City {
   photoFolder: string;
 }
 
+// Mercator projection for China region
 function toPercent(lat: number, lng: number) {
-  // China approx bounds for the cities we have
-  const minLng = 100;
-  const maxLng = 125;
-  const minLat = 20;
-  const maxLat = 42;
+  const minLng = 97;
+  const maxLng = 127;
+  const minLat = 18;
+  const maxLat = 45;
   const x = ((lng - minLng) / (maxLng - minLng)) * 100;
   const y = ((maxLat - lat) / (maxLat - minLat)) * 100;
-  return { x, y };
+  return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
 }
-
-// Simplified China border SVG path (approximate outline)
-const CHINA_PATH = `M 28 8 L 32 5 L 38 3 L 44 2 L 50 4 L 55 3 L 60 5 L 65 4 L 70 6 L 72 10 L 75 12 L 78 10 L 82 12 L 85 15 L 88 14 L 92 16 L 95 20 L 93 24 L 96 28 L 94 32 L 90 35 L 92 38 L 88 42 L 85 45 L 88 48 L 90 52 L 88 56 L 84 58 L 80 62 L 76 65 L 78 68 L 82 72 L 80 76 L 76 78 L 72 82 L 68 85 L 64 82 L 60 84 L 56 88 L 52 90 L 48 88 L 44 90 L 40 92 L 36 90 L 32 88 L 28 85 L 24 82 L 20 78 L 16 74 L 12 70 L 10 66 L 8 62 L 6 58 L 5 54 L 4 50 L 3 46 L 5 42 L 8 38 L 10 34 L 8 30 L 10 26 L 12 22 L 15 18 L 18 14 L 22 10 L 28 8 Z`;
 
 export default function ChinaMap() {
   const [selected, setSelected] = useState<City | null>(null);
   const [hoveredCity, setHoveredCity] = useState<string | null>(null);
-  const sectionRef = useRef<HTMLElement>(null);
+  const [mounted, setMounted] = useState(false);
 
-  // Close modal on Escape
   useEffect(() => {
+    setMounted(true);
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setSelected(null);
     }
@@ -40,118 +37,291 @@ export default function ChinaMap() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const typedCities = cities as City[];
+
+  // Group nearby cities for connection lines
+  const connections = [
+    ["宝鸡", "西安"],
+    ["西安", "华山"],
+    ["西安", "汉中"],
+    ["晋城", "运城"],
+    ["漳州", "厦门"],
+    ["惠州", "深圳"],
+    ["惠州", "清远"],
+    ["惠州", "河源"],
+    ["北京", "秦皇岛"],
+  ];
+
+  function getCityPos(name: string) {
+    const c = typedCities.find((c) => c.name === name);
+    if (!c) return null;
+    return toPercent(c.lat, c.lng);
+  }
+
   return (
     <>
-      <section id="map" ref={sectionRef} className="py-32 px-6">
-        <div className="max-w-prose mx-auto">
+      <section id="map" className="py-32 px-6">
+        <div className="max-w-4xl mx-auto">
           <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-4 text-center">
             我走过的地方
           </h2>
-          <p className="font-serif text-sm text-muted text-center mb-12">
+          <p className="font-serif text-sm text-muted text-center mb-4">
             20 个城市，10 个省份
           </p>
+          <p className="font-sans text-xs text-muted/50 text-center mb-16">
+            点击光点查看照片
+          </p>
 
-          {/* Map container */}
-          <div className="relative w-full" style={{ aspectRatio: "5 / 4" }}>
-            {/* Faint China outline */}
+          {/* Map container — dark card with subtle gradient */}
+          <div
+            className="relative w-full rounded-lg overflow-hidden"
+            style={{
+              aspectRatio: "4 / 3",
+              background:
+                "radial-gradient(ellipse at 60% 40%, #1a1a2e 0%, #0f0f1a 50%, #0a0a12 100%)",
+            }}
+          >
+            {/* Subtle grid lines */}
             <svg
+              className="absolute inset-0 w-full h-full opacity-[0.06]"
               viewBox="0 0 100 100"
-              className="absolute inset-0 w-full h-full"
               preserveAspectRatio="none"
             >
-              <path
-                d={CHINA_PATH}
-                fill="none"
-                stroke="var(--color-line)"
-                strokeWidth="0.5"
-                opacity="0.6"
-              />
+              {Array.from({ length: 10 }, (_, i) => (
+                <line
+                  key={`h${i}`}
+                  x1="0"
+                  y1={i * 10}
+                  x2="100"
+                  y2={i * 10}
+                  stroke="white"
+                  strokeWidth="0.2"
+                />
+              ))}
+              {Array.from({ length: 10 }, (_, i) => (
+                <line
+                  key={`v${i}`}
+                  x1={i * 10}
+                  y1="0"
+                  x2={i * 10}
+                  y2="100"
+                  stroke="white"
+                  strokeWidth="0.2"
+                />
+              ))}
+            </svg>
+
+            {/* Connection lines between nearby cities */}
+            <svg
+              className="absolute inset-0 w-full h-full"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              {connections.map(([from, to], i) => {
+                const a = getCityPos(from);
+                const b = getCityPos(to);
+                if (!a || !b) return null;
+                return (
+                  <line
+                    key={i}
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke="rgba(139, 46, 46, 0.15)"
+                    strokeWidth="0.3"
+                    strokeDasharray="1 1"
+                  />
+                );
+              })}
             </svg>
 
             {/* City dots */}
-            {(cities as City[]).map((city) => {
-              const { x, y } = toPercent(city.lat, city.lng);
-              const isBeijing = city.name === "北京";
-              const isHovered = hoveredCity === city.name;
+            {mounted &&
+              typedCities.map((city, idx) => {
+                const { x, y } = toPercent(city.lat, city.lng);
+                const isBeijing = city.name === "北京";
+                const isHovered = hoveredCity === city.name;
+                const dotSize = isBeijing ? 14 : 10;
 
-              return (
-                <button
-                  key={city.name}
-                  type="button"
-                  className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
-                  style={{ left: `${x}%`, top: `${y}%` }}
-                  onClick={() => setSelected(city)}
-                  onMouseEnter={() => setHoveredCity(city.name)}
-                  onMouseLeave={() => setHoveredCity(null)}
-                  aria-label={`${city.name} - ${city.label}`}
-                >
-                  {/* Glow ring */}
-                  <span
-                    className={`block rounded-full ${
-                      isBeijing ? "w-3.5 h-3.5" : "w-2.5 h-2.5"
-                    } bg-accent city-dot`}
-                    style={
-                      isBeijing
-                        ? {
-                            boxShadow:
-                              "0 0 8px 4px rgba(139, 46, 46, 0.5)",
-                          }
-                        : undefined
-                    }
-                  />
-
-                  {/* Tooltip */}
-                  <span
-                    className={`absolute left-1/2 -translate-x-1/2 -top-7 whitespace-nowrap font-sans text-xs text-ink bg-bg/90 border border-line rounded-sm px-2 py-0.5 pointer-events-none transition-opacity duration-200 ${
-                      isHovered ? "opacity-100" : "opacity-0"
-                    }`}
+                return (
+                  <button
+                    key={city.name}
+                    type="button"
+                    className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group"
+                    style={{
+                      left: `${x}%`,
+                      top: `${y}%`,
+                      zIndex: isHovered ? 20 : 10,
+                      animationDelay: `${idx * 150}ms`,
+                    }}
+                    onClick={() => setSelected(city)}
+                    onMouseEnter={() => setHoveredCity(city.name)}
+                    onMouseLeave={() => setHoveredCity(null)}
+                    aria-label={`${city.name} - ${city.label}`}
                   >
-                    {city.name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                    {/* Outer glow ring */}
+                    <span
+                      className="absolute inset-0 rounded-full city-dot"
+                      style={{
+                        width: dotSize * 2.5,
+                        height: dotSize * 2.5,
+                        top: -(dotSize * 0.75),
+                        left: -(dotSize * 0.75),
+                        background: "transparent",
+                      }}
+                    />
 
-          <p className="font-sans text-xs text-muted text-center mt-6">
-            点击城市查看照片
-          </p>
+                    {/* Core dot */}
+                    <span
+                      className="block rounded-full transition-transform duration-300"
+                      style={{
+                        width: dotSize,
+                        height: dotSize,
+                        background: isBeijing
+                          ? "radial-gradient(circle, #ff6b6b, #8B2E2E)"
+                          : "radial-gradient(circle, #d4726a, #8B2E2E)",
+                        boxShadow: isBeijing
+                          ? "0 0 12px 6px rgba(255, 107, 107, 0.4), 0 0 24px 12px rgba(139, 46, 46, 0.2)"
+                          : isHovered
+                            ? "0 0 10px 5px rgba(212, 114, 106, 0.5), 0 0 20px 10px rgba(139, 46, 46, 0.2)"
+                            : "0 0 6px 3px rgba(139, 46, 46, 0.4)",
+                        transform: isHovered ? "scale(1.5)" : "scale(1)",
+                      }}
+                    />
+
+                    {/* City name label */}
+                    <span
+                      className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap transition-all duration-300 pointer-events-none"
+                      style={{
+                        top: isHovered ? -28 : -24,
+                        opacity: isHovered || isBeijing ? 1 : 0,
+                        fontSize: "11px",
+                        fontFamily: "var(--font-sans)",
+                        color: isBeijing
+                          ? "rgba(255, 200, 200, 0.9)"
+                          : "rgba(255, 255, 255, 0.85)",
+                        textShadow: "0 1px 4px rgba(0,0,0,0.8)",
+                        letterSpacing: "0.1em",
+                      }}
+                    >
+                      {city.name}
+                      {isBeijing && (
+                        <span
+                          style={{
+                            fontSize: "9px",
+                            opacity: 0.6,
+                            marginLeft: 4,
+                          }}
+                        >
+                          ← 在这里
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+
+            {/* Bottom gradient fade */}
+            <div
+              className="absolute bottom-0 left-0 right-0 h-16"
+              style={{
+                background:
+                  "linear-gradient(to top, #0a0a12, transparent)",
+              }}
+            />
+
+            {/* Stats overlay bottom-right */}
+            <div className="absolute bottom-4 right-4 text-right">
+              <p
+                style={{
+                  fontSize: "28px",
+                  fontWeight: 700,
+                  color: "rgba(255, 255, 255, 0.08)",
+                  fontFamily: "var(--font-serif)",
+                  lineHeight: 1,
+                }}
+              >
+                20
+              </p>
+              <p
+                style={{
+                  fontSize: "10px",
+                  color: "rgba(255, 255, 255, 0.15)",
+                  fontFamily: "var(--font-sans)",
+                  letterSpacing: "0.15em",
+                }}
+              >
+                CITIES
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Modal */}
+      {/* Photo Modal */}
       {selected && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm px-6"
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          style={{ background: "rgba(10, 10, 18, 0.85)", backdropFilter: "blur(8px)" }}
           onClick={() => setSelected(null)}
         >
           <div
-            className="bg-bg border border-line rounded-sm max-w-md w-full p-10 text-center"
+            className="relative max-w-lg w-full"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="font-serif text-lg text-ink mb-1">{selected.name}</p>
-            <p className="font-sans text-xs text-muted mb-6 tracking-wide">
-              {selected.label}
-            </p>
-
-            <div className="flex justify-center mb-6">
+            {/* Photo */}
+            <div className="rounded-lg overflow-hidden">
               <Image
                 src={`/cities/${selected.name}.jpg`}
                 alt={`${selected.name} - ${selected.label}`}
-                width={400}
-                height={300}
-                className="rounded-sm object-cover"
-                style={{ maxHeight: "300px" }}
+                width={800}
+                height={600}
+                className="w-full h-auto object-cover"
+                style={{ maxHeight: "60vh" }}
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSelected(null)}
-              className="mt-4 font-sans text-xs text-muted hover:text-ink transition-colors tracking-widest"
-            >
-              关闭
-            </button>
+            {/* Info bar below photo */}
+            <div className="mt-4 flex items-center justify-between">
+              <div>
+                <p
+                  className="font-serif text-ink"
+                  style={{ fontSize: "18px", color: "rgba(255,255,255,0.9)" }}
+                >
+                  {selected.name}
+                </p>
+                <p
+                  className="font-sans"
+                  style={{
+                    fontSize: "12px",
+                    color: "rgba(255,255,255,0.4)",
+                    letterSpacing: "0.1em",
+                    marginTop: 2,
+                  }}
+                >
+                  {selected.label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="font-sans transition-colors"
+                style={{
+                  fontSize: "12px",
+                  color: "rgba(255,255,255,0.3)",
+                  letterSpacing: "0.15em",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.color = "rgba(255,255,255,0.8)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = "rgba(255,255,255,0.3)")
+                }
+              >
+                关闭 ×
+              </button>
+            </div>
           </div>
         </div>
       )}
