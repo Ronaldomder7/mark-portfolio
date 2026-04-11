@@ -1,3 +1,4 @@
+import MouseGlow from "@/components/MouseGlow";
 import Nav from "@/components/Nav";
 import Hero from "@/components/Hero";
 import Works from "@/components/Works";
@@ -13,6 +14,7 @@ import ScrollArrow from "@/components/ScrollArrow";
 export default function Home() {
   return (
     <main>
+      <MouseGlow />
       <Nav />
       <Hero />
       <ScrollArrow to="works" />

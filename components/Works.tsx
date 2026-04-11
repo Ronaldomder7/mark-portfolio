@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import staticContent from "@/content/static.json";
 import type { StaticContent } from "@/lib/types";
+import AnimatedNumber from "@/components/AnimatedNumber";
 
 const content = staticContent as StaticContent;
 
@@ -24,9 +25,10 @@ export default function Works() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-20">
             {content.dataMetrics.map((m, i) => (
               <div key={i} className="text-center">
-                <div className="font-serif text-3xl md:text-4xl text-ink font-medium">
-                  {m.value}
-                </div>
+                <AnimatedNumber
+                  value={m.value}
+                  className="font-serif text-3xl md:text-4xl text-ink font-medium"
+                />
                 <div className="mt-2 font-sans text-xs text-muted tracking-wide">
                   {m.label}
                 </div>
