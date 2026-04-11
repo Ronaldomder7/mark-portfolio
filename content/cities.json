@@ -1,0 +1,22 @@
+[
+  { "name": "宝鸡", "lat": 34.36, "lng": 107.15, "label": "家乡", "photoFolder": "2023-01-20 宝鸡中华石鼓园" },
+  { "name": "西安", "lat": 34.26, "lng": 108.94, "label": "大学四年", "photoFolder": "2023-01-07 西安美术馆" },
+  { "name": "汉中", "lat": 33.07, "lng": 107.03, "label": "旅行", "photoFolder": "2023-08-25 汉中" },
+  { "name": "华山", "lat": 34.48, "lng": 110.09, "label": "爬过两次", "photoFolder": "2023-04-10 生日爬华山" },
+  { "name": "鹤壁", "lat": 35.75, "lng": 114.30, "label": "爷爷家", "photoFolder": "2023-10-02:03 鹤壁爷爷家" },
+  { "name": "晋城", "lat": 35.49, "lng": 112.85, "label": "旅行", "photoFolder": "2023-10-03 山西晋城" },
+  { "name": "运城", "lat": 35.03, "lng": 111.01, "label": "鹳雀楼", "photoFolder": "2023-10-04 鹳雀楼" },
+  { "name": "洛阳", "lat": 34.62, "lng": 112.45, "label": "旅行", "photoFolder": "2023-05-19 去洛阳" },
+  { "name": "上海", "lat": 31.23, "lng": 121.47, "label": "比赛+旅游", "photoFolder": "2024-06-03 上海武康大楼" },
+  { "name": "漳州", "lat": 24.51, "lng": 117.65, "label": "云水谣", "photoFolder": "2023-06-24 漳州市云水谣" },
+  { "name": "厦门", "lat": 24.48, "lng": 118.09, "label": "鼓浪屿", "photoFolder": "2023-06-26 去厦门-鼓浪屿" },
+  { "name": "舟山", "lat": 30.00, "lng": 122.21, "label": "花鸟岛", "photoFolder": "2024-07-07 花鸟岛" },
+  { "name": "六盘水", "lat": 26.60, "lng": 104.83, "label": "旅行", "photoFolder": "2023-07-13 六盘水盘州" },
+  { "name": "惠州", "lat": 23.11, "lng": 114.42, "label": "工作半年", "photoFolder": "2024-10-22 惠州西湖" },
+  { "name": "深圳", "lat": 22.54, "lng": 114.06, "label": "破局大会", "photoFolder": "2025-01-05 去深圳参加破局线下大会" },
+  { "name": "清远", "lat": 23.68, "lng": 113.06, "label": "找朋友", "photoFolder": "2025-01-01 去清远找小鱼" },
+  { "name": "河源", "lat": 23.74, "lng": 114.70, "label": "找D哥", "photoFolder": "2025-02-22 去河源找 d 哥" },
+  { "name": "北京", "lat": 39.90, "lng": 116.40, "label": "现在在这里", "photoFolder": "2025-03 北京的生活" },
+  { "name": "秦皇岛", "lat": 39.93, "lng": 119.60, "label": "旅游", "photoFolder": "2025-05-17 秦皇岛旅游" },
+  { "name": "杭州", "lat": 30.27, "lng": 120.15, "label": "D20", "photoFolder": "2025-07-11 杭州D20" }
+]

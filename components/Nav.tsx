@@ -3,6 +3,7 @@ const NAV_ITEMS = [
   { href: "#works", label: "作品" },
   { href: "#mind", label: "思想" },
   { href: "#timeline", label: "底色" },
+  { href: "#map", label: "足迹" },
   { href: "#recent", label: "生长" },
   { href: "#guestbook", label: "留言" },
 ];

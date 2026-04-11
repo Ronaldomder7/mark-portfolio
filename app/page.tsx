@@ -6,6 +6,7 @@ import Beliefs from "@/components/Beliefs";
 import Thoughts from "@/components/Thoughts";
 import SystemCard from "@/components/SystemCard";
 import Timeline from "@/components/Timeline";
+import ChinaMap from "@/components/ChinaMap";
 import RecentThinking from "@/components/RecentThinking";
 import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
@@ -28,6 +29,8 @@ export default function Home() {
       <SystemCard />
       <ScrollArrow to="timeline" />
       <Timeline />
+      <ScrollArrow to="map" />
+      <ChinaMap />
       <ScrollArrow to="recent" />
       <RecentThinking />
       <ScrollArrow to="guestbook" />
