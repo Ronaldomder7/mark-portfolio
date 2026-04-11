@@ -40,11 +40,27 @@ html, body {
   transform: translateY(0);
 }
 
+/* City dot glow (used in HTML-based dots) */
 .city-dot {
   animation: city-glow 2s ease-in-out infinite;
 }
-
 @keyframes city-glow {
   0%, 100% { box-shadow: 0 0 4px 2px rgba(139, 46, 46, 0.3); }
   50% { box-shadow: 0 0 8px 4px rgba(139, 46, 46, 0.6); }
+}
+
+/* SVG ripple rings */
+.city-ripple {
+  animation: ripple 3s ease-out infinite;
+  transform-origin: center;
+}
+@keyframes ripple {
+  0% { r: 0; opacity: 0.5; }
+  100% { r: 20; opacity: 0; }
+}
+
+/* Modal fade up */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
