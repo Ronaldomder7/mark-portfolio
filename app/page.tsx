@@ -11,12 +11,14 @@ import RecentThinking from "@/components/RecentThinking";
 import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
 import FloatingArrow from "@/components/FloatingArrow";
+import AvatarChat from "@/components/AvatarChat";
 
 export default function Home() {
   return (
     <main>
       <MouseGlow />
       <FloatingArrow />
+      <AvatarChat />
       <Nav />
       <Hero />
       <Works />
