@@ -10,30 +10,24 @@ import ChinaMap from "@/components/ChinaMap";
 import RecentThinking from "@/components/RecentThinking";
 import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
-import ScrollArrow from "@/components/ScrollArrow";
+import FloatingArrow from "@/components/FloatingArrow";
 
 export default function Home() {
   return (
     <main>
       <MouseGlow />
+      <FloatingArrow />
       <Nav />
       <Hero />
-      <ScrollArrow to="works" />
       <Works />
-      <ScrollArrow to="beliefs" />
       <div id="beliefs">
         <Beliefs />
       </div>
-      <ScrollArrow to="mind" />
       <Thoughts />
       <SystemCard />
-      <ScrollArrow to="timeline" />
       <Timeline />
-      <ScrollArrow to="map" />
       <ChinaMap />
-      <ScrollArrow to="recent" />
       <RecentThinking />
-      <ScrollArrow to="guestbook" />
       <Guestbook />
       <Footer />
     </main>
