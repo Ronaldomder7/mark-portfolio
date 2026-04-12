@@ -81,7 +81,7 @@ export default {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": \`Bearer \${env.DASHSCOPE_API_KEY}\`,
+          "Authorization": `Bearer ${env.DASHSCOPE_API_KEY}`,
         },
         body: JSON.stringify({
           model: "qwen-plus",
