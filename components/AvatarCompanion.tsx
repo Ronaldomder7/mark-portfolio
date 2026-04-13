@@ -1,34 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 
-// Section-to-state mapping: what the avatar "does" at each section
-type AvatarState = "idle" | "wave" | "think" | "read" | "work" | "sleep" | "excited";
-
-const SECTION_STATES: Record<string, { state: AvatarState; tooltip: string }> = {
-  hero: { state: "wave", tooltip: "你好！" },
-  works: { state: "work", tooltip: "在复盘数据..." },
-  beliefs: { state: "think", tooltip: "在想事情..." },
-  mind: { state: "read", tooltip: "在读笔记..." },
-  timeline: { state: "idle", tooltip: "在回忆..." },
-  map: { state: "excited", tooltip: "想去旅行！" },
-  recent: { state: "think", tooltip: "在思考..." },
-  guestbook: { state: "wave", tooltip: "留个言吧！" },
-};
-
-const SECTIONS = ["hero", "works", "beliefs", "mind", "timeline", "map", "recent", "guestbook"];
-
-// CSS transforms for different states
-const STATE_STYLES: Record<AvatarState, React.CSSProperties> = {
-  idle: {},
-  wave: { transform: "rotate(-5deg)" },
-  think: { transform: "translateY(-3px) rotate(3deg)" },
-  read: { transform: "translateY(2px) rotate(-2deg)" },
-  work: { transform: "scaleX(-1)" }, // flip horizontally
-  sleep: { transform: "rotate(15deg) translateY(5px)", opacity: 0.7 },
-  excited: { transform: "translateY(-8px) scale(1.05)" },
-};
+type PetState = "idle" | "walking" | "sleeping" | "wave" | "thinking";
 
 interface AvatarCompanionProps {
   onChatOpen: () => void;
@@ -36,120 +11,238 @@ interface AvatarCompanionProps {
 }
 
 export default function AvatarCompanion({ onChatOpen, chatOpen }: AvatarCompanionProps) {
-  const [currentState, setCurrentState] = useState<AvatarState>("wave");
-  const [tooltip, setTooltip] = useState("你好！");
-  const [hovered, setHovered] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(true);
+  const [pos, setPos] = useState({ x: 100, y: 100 });
+  const [targetPos, setTargetPos] = useState({ x: 100, y: 100 });
+  const [state, setState] = useState<PetState>("idle");
+  const [facingLeft, setFacingLeft] = useState(false);
+  const [frame, setFrame] = useState(0);
+  const [showBubble, setShowBubble] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const idleTimer = useRef<NodeJS.Timeout | null>(null);
+  const frameRef = useRef(0);
+  const stateRef = useRef<PetState>("idle");
+  const posRef = useRef({ x: 100, y: 100 });
+  const targetRef = useRef({ x: 100, y: 100 });
 
-  // Track which section is in view
+  // Initialize position
   useEffect(() => {
-    function updateState() {
-      const scrollY = window.scrollY;
-      const viewH = window.innerHeight;
-      const center = scrollY + viewH * 0.5;
-
-      let currentSection = "hero";
-      for (const id of SECTIONS) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        if (el.offsetTop <= center) {
-          currentSection = id;
-        }
-      }
-
-      const sectionConfig = SECTION_STATES[currentSection] || SECTION_STATES.hero;
-      setCurrentState(sectionConfig.state);
-      setTooltip(sectionConfig.tooltip);
-    }
-
-    updateState();
-    window.addEventListener("scroll", updateState, { passive: true });
-    return () => window.removeEventListener("scroll", updateState);
+    setMounted(true);
+    const startX = window.innerWidth - 120;
+    const startY = window.innerHeight - 120;
+    setPos({ x: startX, y: startY });
+    setTargetPos({ x: startX, y: startY });
+    posRef.current = { x: startX, y: startY };
+    targetRef.current = { x: startX, y: startY };
   }, []);
 
-  // Auto-hide tooltip after 3 seconds, show again on section change
+  // Track mouse position as target
   useEffect(() => {
-    setShowTooltip(true);
-    const timer = setTimeout(() => setShowTooltip(false), 3000);
-    return () => clearTimeout(timer);
-  }, [currentState]);
+    if (!mounted) return;
 
-  if (chatOpen) return null; // Hide when chat is open
+    function onMouseMove(e: MouseEvent) {
+      targetRef.current = { x: e.clientX - 16, y: e.clientY - 16 };
+
+      // Wake up if sleeping
+      if (stateRef.current === "sleeping") {
+        stateRef.current = "walking";
+        setState("walking");
+      }
+
+      // Reset idle timer
+      if (idleTimer.current) clearTimeout(idleTimer.current);
+      idleTimer.current = setTimeout(() => {
+        stateRef.current = "idle";
+        setState("idle");
+
+        // After longer idle, fall asleep
+        idleTimer.current = setTimeout(() => {
+          stateRef.current = "sleeping";
+          setState("sleeping");
+        }, 8000);
+      }, 2000);
+    }
+
+    window.addEventListener("mousemove", onMouseMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMouseMove);
+  }, [mounted]);
+
+  // Main animation loop
+  useEffect(() => {
+    if (!mounted) return;
+
+    const SPEED = 6;
+    const CLOSE_ENOUGH = 48;
+    let animId: number;
+    let lastTime = 0;
+
+    function tick(timestamp: number) {
+      animId = requestAnimationFrame(tick);
+
+      // ~60ms per frame (like oneko.js's 100ms but smoother)
+      if (timestamp - lastTime < 60) return;
+      lastTime = timestamp;
+
+      const current = posRef.current;
+      const target = targetRef.current;
+
+      const dx = target.x - current.x;
+      const dy = target.y - current.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > CLOSE_ENOUGH) {
+        // Move toward target
+        const moveX = (dx / dist) * SPEED;
+        const moveY = (dy / dist) * SPEED;
+        const newPos = {
+          x: current.x + moveX,
+          y: current.y + moveY,
+        };
+        posRef.current = newPos;
+        setPos(newPos);
+
+        // Face direction of movement
+        setFacingLeft(dx < 0);
+
+        // Set walking state
+        if (stateRef.current !== "walking") {
+          stateRef.current = "walking";
+          setState("walking");
+        }
+
+        // Animate walking frame
+        frameRef.current = (frameRef.current + 1) % 4;
+        setFrame(frameRef.current);
+      } else {
+        // Close enough — idle
+        if (stateRef.current === "walking") {
+          stateRef.current = "idle";
+          setState("idle");
+        }
+      }
+    }
+
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [mounted]);
+
+  // Hide bubble after 5 seconds
+  useEffect(() => {
+    const t = setTimeout(() => setShowBubble(false), 5000);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (!mounted || chatOpen) return null;
+
+  // CSS transforms based on state
+  const stateTransform = (() => {
+    switch (state) {
+      case "walking":
+        // Bouncy walk: alternate Y offset
+        return `translateY(${frame % 2 === 0 ? -3 : 3}px)`;
+      case "sleeping":
+        return "rotate(20deg) scale(0.85)";
+      case "idle":
+        return "";
+      default:
+        return "";
+    }
+  })();
 
   return (
-    <button
-      type="button"
-      onClick={onChatOpen}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="fixed z-50 cursor-pointer group"
+    <div
+      className="fixed z-50 pointer-events-none"
       style={{
-        bottom: 24,
-        right: 24,
-        width: 80,
-        height: 80,
+        left: pos.x,
+        top: pos.y,
+        transition: state === "walking" ? "none" : "left 0.3s, top 0.3s",
       }}
-      aria-label="和马克的数字分身聊天"
     >
-      {/* Tooltip bubble */}
-      <span
-        className="absolute -top-12 right-0 whitespace-nowrap font-sans text-xs bg-bg border border-line rounded-full px-4 py-2 pointer-events-none transition-all duration-500"
-        style={{
-          color: "#1A1A1A",
-          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-          opacity: showTooltip || hovered ? 1 : 0,
-          transform: showTooltip || hovered ? "translateY(0)" : "translateY(4px)",
-        }}
-      >
-        {hovered ? "点我聊天 💬" : tooltip}
-      </span>
-
-      {/* Avatar container with breathing animation */}
-      <div
-        className="relative w-full h-full transition-all duration-700 ease-in-out"
-        style={{
-          animation: "avatarFloat 3s ease-in-out infinite",
-          ...STATE_STYLES[hovered ? "excited" : currentState],
-        }}
-      >
-        {/* Shadow under avatar */}
+      {/* Speech bubble */}
+      {showBubble && state !== "sleeping" && (
         <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full"
+          className="absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none"
           style={{
-            width: 50,
-            height: 8,
-            background: "rgba(0,0,0,0.08)",
-            filter: "blur(3px)",
-            animation: "avatarShadow 3s ease-in-out infinite",
+            background: "#FAFAF8",
+            border: "1px solid #E8E6E1",
+            borderRadius: 12,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontFamily: "var(--font-sans)",
+            color: "#1A1A1A",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            animation: "fadeUp 0.3s ease-out",
           }}
-        />
+        >
+          点击我聊天 👋
+          {/* Triangle pointer */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 -bottom-1.5"
+            style={{
+              width: 8,
+              height: 8,
+              background: "#FAFAF8",
+              border: "1px solid #E8E6E1",
+              borderTop: "none",
+              borderLeft: "none",
+              transform: "translateX(-50%) rotate(45deg)",
+            }}
+          />
+        </div>
+      )}
 
-        {/* Avatar image — transparent background version */}
+      {/* Sleeping zzz */}
+      {state === "sleeping" && (
+        <div
+          className="absolute -top-8 -right-2 font-serif text-muted pointer-events-none select-none"
+          style={{
+            fontSize: 16,
+            animation: "zzzFloat 2s ease-in-out infinite",
+          }}
+        >
+          💤
+        </div>
+      )}
+
+      {/* Avatar — clickable */}
+      <button
+        type="button"
+        onClick={onChatOpen}
+        className="pointer-events-auto cursor-pointer block"
+        style={{
+          width: 64,
+          height: 64,
+          transform: `${facingLeft ? "scaleX(-1)" : ""} ${stateTransform}`,
+          transition: "transform 0.15s ease",
+          filter: state === "sleeping"
+            ? "brightness(0.8) saturate(0.7)"
+            : "drop-shadow(0 3px 8px rgba(0,0,0,0.12))",
+        }}
+        aria-label="和马克的数字分身聊天"
+      >
         <Image
           src="/avatar-nobg.png"
-          alt="马克的数字分身"
-          width={80}
-          height={80}
-          className="object-contain object-bottom drop-shadow-lg transition-transform duration-300"
-          style={{
-            filter: hovered
-              ? "drop-shadow(0 4px 12px rgba(139, 46, 46, 0.3))"
-              : "drop-shadow(0 2px 6px rgba(0,0,0,0.1))",
-          }}
+          alt="马克"
+          width={64}
+          height={64}
+          className="object-contain"
           priority
         />
-      </div>
+      </button>
 
-      {/* Pulse ring */}
-      {!hovered && (
-        <span
-          className="absolute inset-0 rounded-full pointer-events-none"
-          style={{
-            border: "1.5px solid rgba(139, 46, 46, 0.2)",
-            animation: "avatarPulse 2.5s ease-out infinite",
-          }}
-        />
-      )}
-    </button>
+      {/* Ground shadow */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          bottom: -4,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: state === "sleeping" ? 30 : 40,
+          height: 6,
+          background: "rgba(0,0,0,0.06)",
+          borderRadius: "50%",
+          filter: "blur(2px)",
+        }}
+      />
+    </div>
   );
 }
