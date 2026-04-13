@@ -70,3 +70,15 @@ html, body {
   0% { transform: scale(1); opacity: 0.6; }
   100% { transform: scale(1.6); opacity: 0; }
 }
+
+/* Avatar floating / breathing */
+@keyframes avatarFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Avatar shadow (syncs with float) */
+@keyframes avatarShadow {
+  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.08; }
+  50% { transform: translateX(-50%) scale(0.8); opacity: 0.04; }
+}
