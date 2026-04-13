@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import AvatarCompanion from "@/components/AvatarCompanion";
+import Avatar3D from "@/components/Avatar3D";
 
 interface Message {
   role: "user" | "assistant";
@@ -82,7 +82,7 @@ export default function AvatarChat() {
   return (
     <>
       {/* Floating avatar companion — shows on page, hides when chat open */}
-      <AvatarCompanion onChatOpen={() => setOpen(true)} chatOpen={open} />
+      <Avatar3D onChatOpen={() => setOpen(true)} chatOpen={open} />
 
       {/* Chat window */}
       {open && (
