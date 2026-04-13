@@ -9,8 +9,8 @@ interface Message {
   content: string;
 }
 
-// Worker URL
-const CHAT_API = "https://mark-chat.mazerun660.workers.dev";
+// Worker URL — use custom domain (workers.dev blocked in China)
+const CHAT_API = "https://chat.asi-mark.cn";
 
 export default function AvatarChat() {
   const [open, setOpen] = useState(false);
