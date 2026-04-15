@@ -20,6 +20,14 @@ export default function FloatingArrow() {
         setVisible(false);
         return;
       }
+
+      // Hide while viewing Hero (flashlight lives here in roughly the
+      // same position). Use Hero's section height as the cutoff.
+      const hero = document.getElementById("hero");
+      if (hero && scrollY < hero.offsetHeight - 100) {
+        setVisible(false);
+        return;
+      }
       setVisible(true);
 
       // Find the next section below current viewport center

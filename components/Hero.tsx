@@ -49,18 +49,6 @@ export default function Hero() {
 
   const flashControls = useAnimation();
 
-  // Flashlight entrance — show it + fade it in when typing completes
-  useEffect(() => {
-    if (typingComplete) {
-      flashControls.start({
-        opacity: 1,
-        y: 0,
-        x: 0,
-        transition: { duration: 0.6, delay: 0.2 },
-      });
-    }
-  }, [typingComplete, flashControls]);
-
   const rebuildMask = useCallback(() => {
     const canvas = maskCanvasRef.current;
     const section = sectionRef.current;
@@ -72,7 +60,6 @@ export default function Hero() {
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Mask starts transparent (big text hidden); paint opaque in scanned circles.
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const p of visitedPointsRef.current) {
       const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
@@ -98,7 +85,7 @@ export default function Hero() {
     if (prev) {
       const dx = prev.x - x;
       const dy = prev.y - y;
-      if (dx * dx + dy * dy < 64) return; // <8px dedup
+      if (dx * dx + dy * dy < 64) return;
     }
 
     visitedPointsRef.current.push({ x, y, r: RADIUS });
@@ -150,11 +137,9 @@ export default function Hero() {
     setFlashPos(null);
     visitedPointsRef.current = [];
     setMaskUrl("");
-    // Slide flashlight back to origin, keep it visible
     flashControls.start({
       x: 0,
       y: 0,
-      opacity: 1,
       transition: { duration: 0.5 },
     });
     window.dispatchEvent(new Event("avatar:resume"));
@@ -165,16 +150,13 @@ export default function Hero() {
     resetAll();
   }
 
-  // Safety: resume avatar on unmount
   useEffect(() => {
     return () => {
       window.dispatchEvent(new Event("avatar:resume"));
     };
   }, []);
 
-  // Night overlay opacity: visible during drag AND during reveal (before fadeOut)
   const nightActive = dragging || (revealed && !fadeOut);
-  const nightOpacity = nightActive ? 1 : 0;
 
   return (
     <section
@@ -185,7 +167,7 @@ export default function Hero() {
     >
       <canvas ref={maskCanvasRef} className="hidden" aria-hidden="true" />
 
-      {/* Small text — visible when not in night mode */}
+      {/* Small text */}
       <div
         className="relative z-[1] space-y-3 transition-opacity"
         style={{
@@ -206,16 +188,16 @@ export default function Hero() {
         ))}
       </div>
 
-      {/* Night overlay: solid dark covers everything when active */}
+      {/* Night overlay */}
       <div
         className="absolute inset-0 pointer-events-none z-[2] transition-opacity duration-500"
         style={{
           background: NIGHT_COLOR,
-          opacity: nightOpacity,
+          opacity: nightActive ? 1 : 0,
         }}
       />
 
-      {/* Flashlight beam: warm glow at current position (only during drag) */}
+      {/* Flashlight beam */}
       {dragging && flashPos && (
         <div
           className="absolute inset-0 pointer-events-none z-[3]"
@@ -225,8 +207,7 @@ export default function Hero() {
         />
       )}
 
-      {/* Big WHITE text on dark — visible only where scanned (via mask),
-          or fully visible during reveal latch */}
+      {/* Big white text, masked */}
       <div
         className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[4]"
         style={{
@@ -268,18 +249,22 @@ export default function Hero() {
         马泽闰 Mark · 2026
       </div>
 
-      {/* Flashlight — always in DOM once typing completes; visibility managed via flashControls */}
+      {/* Flashlight — no framer-motion initial/opacity, let style handle
+          entrance via CSS transition. z-[80] to sit above FloatingArrow (z-60). */}
       {typingComplete && (
         <motion.div
           drag
           dragMomentum={false}
           animate={flashControls}
-          initial={{ opacity: 0, y: 20 }}
           onDrag={onDrag}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           whileDrag={{ scale: 1.15 }}
-          className="absolute bottom-32 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing select-none z-[5] flex flex-col items-center gap-2"
+          className="fixed bottom-12 left-1/2 cursor-grab active:cursor-grabbing select-none z-[80] flex flex-col items-center gap-2"
+          style={{
+            transform: "translateX(-50%)",
+            opacity: 1,
+          }}
           aria-label="手电筒——拖动我扫过文字，右键复位"
         >
           {!dragging && !revealed && (
@@ -311,7 +296,7 @@ export default function Hero() {
           <span className="text-4xl relative z-[1]">🔦</span>
           <span
             className="font-sans text-[10px] tracking-widest whitespace-nowrap pointer-events-none"
-            style={{ color: nightActive ? "#999" : "var(--color-muted, #888)" }}
+            style={{ color: nightActive ? "#ccc" : "#888" }}
           >
             拖动我 · 右键复位
           </span>
