@@ -2,32 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-// Section IDs in order (minus Hero — we hide while Hero is visible)
 const SECTIONS = ["experience", "beliefs", "mind", "timeline", "map", "recent", "guestbook"];
 
 export default function FloatingArrow() {
-  const [nextSection, setNextSection] = useState<string | null>(null);
-  const [heroVisible, setHeroVisible] = useState(true); // assume hero visible on load
+  const [nextSection, setNextSection] = useState<string | null>("experience");
   const [nearBottom, setNearBottom] = useState(false);
 
-  // Reliable Hero visibility via IntersectionObserver
-  useEffect(() => {
-    const hero = document.getElementById("hero");
-    if (!hero) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        // Treat Hero as "visible" when >= 20% of it is in viewport.
-        // This keeps FloatingArrow out of the way while the flashlight
-        // has center stage on Hero.
-        setHeroVisible(entry.intersectionRatio >= 0.2);
-      },
-      { threshold: [0, 0.2, 0.5, 1] }
-    );
-    obs.observe(hero);
-    return () => obs.disconnect();
-  }, []);
-
-  // Next-section tracking + bottom detection
   useEffect(() => {
     function update() {
       const scrollY = window.scrollY;
@@ -46,6 +26,7 @@ export default function FloatingArrow() {
           break;
         }
       }
+      if (!next) next = SECTIONS[0]; // fall back to first section on Hero
       setNextSection(next);
     }
 
@@ -58,14 +39,16 @@ export default function FloatingArrow() {
     };
   }, []);
 
-  const visible = !heroVisible && !nearBottom && !!nextSection;
-  if (!visible) return null;
+  if (nearBottom || !nextSection) return null;
 
   return (
     <a
       href={`#${nextSection}`}
       aria-label="继续向下"
-      className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] transition-all duration-500"
+      // Positioned bottom-right on desktop so it doesn't fight with the
+      // centered flashlight in Hero; centered at bottom on small screens
+      // where horizontal space is tight.
+      className="fixed bottom-8 right-8 md:right-12 z-[60] transition-all duration-500"
       style={{ opacity: 0.4 }}
     >
       <div

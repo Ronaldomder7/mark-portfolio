@@ -46,6 +46,9 @@ export default function Hero() {
   );
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
+  // One-way latch: once user has seen the full reveal, the flashlight
+  // becomes dormant (no more halo, no more scan tracking).
+  const [completed, setCompleted] = useState(false);
 
   const flashControls = useAnimation();
 
@@ -75,7 +78,7 @@ export default function Hero() {
   }, []);
 
   function onDrag(_e: unknown, info: { point: { x: number; y: number } }) {
-    if (revealed || !sectionRef.current || !typingComplete) return;
+    if (revealed || completed || !sectionRef.current || !typingComplete) return;
     const rect = sectionRef.current.getBoundingClientRect();
     const x = info.point.x - rect.left;
     const y = info.point.y - rect.top;
@@ -108,16 +111,52 @@ export default function Hero() {
         setDragging(false);
         setFlashPos(null);
         window.dispatchEvent(new Event("avatar:resume"));
-        setTimeout(() => setFadeOut(true), 4000);
-        setTimeout(() => {
-          resetAll();
-        }, 6500);
+        void endReveal();
       }
     }
   }
 
+  // After the big text has been on screen long enough, play the "drop"
+  // sequence: flashlight falls, returns to origin, halo extinguishes.
+  async function endReveal() {
+    // Let the big text sit on dark background ~3.5s
+    await new Promise((r) => setTimeout(r, 3500));
+
+    // Fade out big text + restore small text
+    setFadeOut(true);
+    await new Promise((r) => setTimeout(r, 900));
+
+    // Drop: flashlight pitches forward and down like gravity took over
+    await flashControls.start({
+      y: 180,
+      rotate: 28,
+      opacity: 0.55,
+      transition: { duration: 0.55, ease: [0.4, 0, 0.6, 1] },
+    });
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Slide/pop back to origin
+    await flashControls.start({
+      x: 0,
+      y: 0,
+      rotate: 0,
+      opacity: 1,
+      transition: { duration: 0.45, ease: "easeOut" },
+    });
+
+    // Final state: flashlight is present but dormant (no halo, no scan)
+    setRevealed(false);
+    setFadeOut(false);
+    setDragging(false);
+    setFlashPos(null);
+    visitedPointsRef.current = [];
+    setMaskUrl("");
+    setCompleted(true);
+    window.dispatchEvent(new Event("avatar:resume"));
+  }
+
   function onDragStart() {
-    if (revealed) return;
+    if (revealed || completed) return;
     setDragging(true);
     window.dispatchEvent(new Event("avatar:pause"));
   }
@@ -253,7 +292,7 @@ export default function Hero() {
           entrance via CSS transition. z-[80] to sit above FloatingArrow (z-60). */}
       {typingComplete && (
         <motion.div
-          drag
+          drag={!completed}
           dragMomentum={false}
           animate={flashControls}
           onDrag={onDrag}
@@ -264,7 +303,7 @@ export default function Hero() {
           style={{ opacity: 1 }}
           aria-label="手电筒——拖动我扫过文字，右键复位"
         >
-          {!dragging && !revealed && (
+          {!dragging && !revealed && !completed && (
             <>
               <span
                 className="absolute pointer-events-none rounded-full"
@@ -290,13 +329,22 @@ export default function Hero() {
               />
             </>
           )}
-          <span className="text-4xl relative z-[1]">🔦</span>
           <span
-            className="font-sans text-[10px] tracking-widest whitespace-nowrap pointer-events-none"
-            style={{ color: nightActive ? "#ccc" : "#888" }}
+            className="text-4xl relative z-[1] transition-all duration-500"
+            style={{
+              filter: completed ? "grayscale(0.6) brightness(0.85)" : "none",
+            }}
           >
-            拖动我 · 右键复位
+            🔦
           </span>
+          {!completed && (
+            <span
+              className="font-sans text-[10px] tracking-widest whitespace-nowrap pointer-events-none"
+              style={{ color: nightActive ? "#ccc" : "#888" }}
+            >
+              拖动我 · 右键复位
+            </span>
+          )}
         </motion.div>
       )}
     </section>
