@@ -116,26 +116,21 @@ export default function ProjectDetail({
               </h2>
               <div className="border-t border-line">
                 {project.works.map((w, i) => (
-                  <a
+                  <div
                     key={i}
-                    href="#apply"
-                    onClick={onClose}
-                    className="group block border-b border-line py-6 px-2 hover:bg-ink/[0.02] transition-colors"
+                    className="border-b border-line py-6 px-2"
                   >
                     <div className="flex items-baseline justify-between gap-4">
                       <div className="min-w-0">
-                        <div className="font-serif text-lg text-ink group-hover:text-accent transition-colors">
+                        <div className="font-serif text-lg text-ink">
                           {w.title}
                         </div>
                         <div className="font-sans text-xs text-muted mt-1 tracking-wide">
                           {w.metric}
                         </div>
                       </div>
-                      <div className="font-sans text-xs text-muted group-hover:text-accent transition-colors shrink-0">
-                        申请查看 →
-                      </div>
                     </div>
-                  </a>
+                  </div>
                 ))}
               </div>
             </div>
