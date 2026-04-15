@@ -85,7 +85,8 @@ export default function ChinaMap() {
 
   const mapRef = useRef<HTMLDivElement>(null);
 
-  const { hand, videoRef } = useHandTracking(gestureMode === "camera");
+  const { hand, status: handStatus, error: handError, videoRef } =
+    useHandTracking(gestureMode === "camera");
 
   const selectCity = useCallback((city: City) => {
     setSelected(city);
@@ -182,26 +183,69 @@ export default function ChinaMap() {
               />
             )}
 
-            {/* Camera mode: video preview + hand position overlay */}
+            {/* Camera mode: video preview + hand position overlay + status */}
             {gestureMode === "camera" && (
-              <div className="absolute top-4 left-4 z-10 w-48 aspect-video border border-line rounded-sm overflow-hidden bg-black">
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  style={{ transform: "scaleX(-1)" }}
-                  muted
-                  playsInline
-                />
-                {hand && (
-                  <div
-                    className="absolute w-6 h-6 border-2 border-accent rounded-full pointer-events-none"
-                    style={{
-                      left: `${hand.x * 100}%`,
-                      top: `${hand.y * 100}%`,
-                      transform: "translate(-50%, -50%)",
-                    }}
+              <div className="absolute top-4 left-4 z-10 w-56">
+                <div className="aspect-video border border-line rounded-sm overflow-hidden bg-black relative">
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    style={{ transform: "scaleX(-1)" }}
+                    muted
+                    playsInline
                   />
-                )}
+                  {hand && (
+                    <div
+                      className={`absolute w-8 h-8 rounded-full pointer-events-none border-2 transition-colors ${
+                        hand.isFist
+                          ? "bg-accent/40 border-accent"
+                          : "border-accent"
+                      }`}
+                      style={{
+                        left: `${hand.x * 100}%`,
+                        top: `${hand.y * 100}%`,
+                        transform: "translate(-50%, -50%)",
+                      }}
+                    />
+                  )}
+                  {/* Loading / status overlay */}
+                  {handStatus !== "running" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-xs font-sans tracking-wide text-center px-3">
+                      {handStatus === "loading-wasm" && "加载识别引擎…"}
+                      {handStatus === "loading-model" && "加载手势模型…"}
+                      {handStatus === "awaiting-camera" && "等待摄像头…"}
+                      {handStatus === "error" && (
+                        <div>
+                          <p className="mb-2 text-red-300">无法启动摄像头</p>
+                          <p className="text-[10px] text-white/60 break-all">
+                            {handError}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {/* Status line + exit camera mode */}
+                <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-sans tracking-widest">
+                  <span className="text-muted uppercase">
+                    {handStatus === "running"
+                      ? hand
+                        ? hand.isFist
+                          ? "握拳"
+                          : "跟踪中"
+                        : "举手入镜"
+                      : handStatus === "error"
+                      ? "失败"
+                      : "初始化…"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setGestureMode("mouse")}
+                    className="text-muted hover:text-ink transition-colors uppercase"
+                  >
+                    切回鼠标 →
+                  </button>
+                </div>
               </div>
             )}
 

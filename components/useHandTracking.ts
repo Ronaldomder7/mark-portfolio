@@ -13,19 +13,38 @@ export interface HandState {
   isFist: boolean;
 }
 
+export type HandTrackingStatus =
+  | "idle"
+  | "loading-wasm"
+  | "loading-model"
+  | "awaiting-camera"
+  | "running"
+  | "error";
+
 export interface UseHandTrackingResult {
   hand: HandState | null;
+  status: HandTrackingStatus;
   error: string | null;
   videoRef: RefObject<HTMLVideoElement | null>;
 }
 
+// Pin versions for cache predictability and to avoid @latest resolution lag
+const WASM_URL =
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
 export function useHandTracking(enabled: boolean): UseHandTrackingResult {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hand, setHand] = useState<HandState | null>(null);
+  const [status, setStatus] = useState<HandTrackingStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setStatus("idle");
+      return;
+    }
 
     let landmarker: HandLandmarker | null = null;
     let rafId = 0;
@@ -34,18 +53,19 @@ export function useHandTracking(enabled: boolean): UseHandTrackingResult {
 
     async function setup() {
       try {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-        );
+        setStatus("loading-wasm");
+        const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+        if (stopped) return;
+
+        setStatus("loading-model");
         landmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          },
+          baseOptions: { modelAssetPath: MODEL_URL },
           runningMode: "VIDEO",
           numHands: 1,
         });
+        if (stopped) return;
 
+        setStatus("awaiting-camera");
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: 320, height: 240 },
         });
@@ -57,18 +77,19 @@ export function useHandTracking(enabled: boolean): UseHandTrackingResult {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
         }
+        setStatus("running");
 
         const tick = () => {
           if (stopped || !landmarker || !videoRef.current) return;
-          // Guard: only detect when video has valid dimensions
-          if (videoRef.current.readyState >= 2 && videoRef.current.videoWidth > 0) {
+          if (
+            videoRef.current.readyState >= 2 &&
+            videoRef.current.videoWidth > 0
+          ) {
             const now = performance.now();
             const result = landmarker.detectForVideo(videoRef.current, now);
             const landmarks = result.landmarks[0];
             if (landmarks) {
-              // Palm center = landmark 9 (middle finger MCP)
               const palm = landmarks[9];
-              // Fist detection: average distance of fingertips (8,12,16,20) to wrist (0)
               const wrist = landmarks[0];
               const tips = [8, 12, 16, 20].map((i) => landmarks[i]);
               const avgDist =
@@ -76,8 +97,8 @@ export function useHandTracking(enabled: boolean): UseHandTrackingResult {
                   (sum, t) => sum + Math.hypot(t.x - wrist.x, t.y - wrist.y),
                   0
                 ) / tips.length;
-              const isFist = avgDist < 0.15;
-              // Mirror x so that left in real life = left on screen (natural mirror UX)
+              // More forgiving fist threshold — 0.18 catches partial curl too
+              const isFist = avgDist < 0.18;
               setHand({ x: 1 - palm.x, y: palm.y, isFist });
             } else {
               setHand(null);
@@ -87,7 +108,10 @@ export function useHandTracking(enabled: boolean): UseHandTrackingResult {
         };
         tick();
       } catch (e) {
-        setError(String(e));
+        if (!stopped) {
+          setStatus("error");
+          setError(e instanceof Error ? e.message : String(e));
+        }
       }
     }
 
@@ -101,5 +125,5 @@ export function useHandTracking(enabled: boolean): UseHandTrackingResult {
     };
   }, [enabled]);
 
-  return { hand, error, videoRef };
+  return { hand, status, error, videoRef };
 }
