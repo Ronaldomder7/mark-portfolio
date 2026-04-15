@@ -260,11 +260,8 @@ export default function Hero() {
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           whileDrag={{ scale: 1.15 }}
-          className="fixed bottom-12 left-1/2 cursor-grab active:cursor-grabbing select-none z-[80] flex flex-col items-center gap-2"
-          style={{
-            transform: "translateX(-50%)",
-            opacity: 1,
-          }}
+          className="absolute bottom-28 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing select-none z-[80] flex flex-col items-center gap-2"
+          style={{ opacity: 1 }}
           aria-label="手电筒——拖动我扫过文字，右键复位"
         >
           {!dragging && !revealed && (
