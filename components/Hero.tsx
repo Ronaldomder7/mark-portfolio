@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, useAnimation } from "framer-motion";
 import staticContent from "@/content/static.json";
 import type { StaticContent } from "@/lib/types";
 import {
@@ -12,12 +12,12 @@ import {
 
 const content = staticContent as StaticContent;
 
-const RADIUS = 80;
+const RADIUS = 100;
 const THRESHOLD = 0.4;
 const MAX_POINTS = 800;
 
 export default function Hero() {
-  // --- Typing animation for 3 hook lines ---
+  // --- Typing animation ---
   const [visibleChars, setVisibleChars] = useState(0);
   const fullText = content.hook.lines.join("\n");
   const totalChars = fullText.length;
@@ -40,13 +40,19 @@ export default function Hero() {
   const lastMaskUpdateRef = useRef(0);
   const [maskUrl, setMaskUrl] = useState<string>("");
   const [dragging, setDragging] = useState(false);
+  const [flashPos, setFlashPos] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
-  const [hideFlash, setHideFlash] = useState(false);
+  // Reset counter — bumps when user right-clicks to reset flashlight position
+  const [resetKey, setResetKey] = useState(0);
 
-  // Rebuild the mask canvas. It's applied to the BIG text layer:
-  //   opaque = big text visible, transparent = big text hidden.
-  // So: start transparent, draw opaque circles where flashlight has been.
+  // Framer-motion controls so we can animate flashlight back to origin on reset
+  const flashControls = useAnimation();
+
+  // Rebuild the mask canvas: transparent by default, opaque where flashlight
+  // has been. Applied to big text layer → big text only shows where scanned.
   const rebuildMask = useCallback(() => {
     const canvas = maskCanvasRef.current;
     const section = sectionRef.current;
@@ -58,13 +64,11 @@ export default function Hero() {
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Start fully transparent (big text hidden everywhere)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Paint opaque circles where flashlight has been (big text shows there)
     for (const p of visitedPointsRef.current) {
       const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
       grad.addColorStop(0, "rgba(0,0,0,1)");
-      grad.addColorStop(0.55, "rgba(0,0,0,1)");
+      grad.addColorStop(0.6, "rgba(0,0,0,1)");
       grad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -74,15 +78,14 @@ export default function Hero() {
     setMaskUrl(canvas.toDataURL());
   }, []);
 
-  // Only record scan points when the flashlight is actively being dragged.
-  function onPointerMove(e: React.PointerEvent) {
-    if (!dragging || revealed || hideFlash || !typingComplete) return;
+  // Called by framer-motion during drag with pointer info
+  function onDrag(_e: unknown, info: { point: { x: number; y: number } }) {
+    if (revealed || !sectionRef.current || !typingComplete) return;
+    const rect = sectionRef.current.getBoundingClientRect();
+    const x = info.point.x - rect.left;
+    const y = info.point.y - rect.top;
+    setFlashPos({ x, y });
 
-    const rect = sectionRef.current!.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Dedup close-together points
     const prev = visitedPointsRef.current[visitedPointsRef.current.length - 1];
     if (prev) {
       const dx = prev.x - x;
@@ -95,7 +98,6 @@ export default function Hero() {
       visitedPointsRef.current.shift();
     }
 
-    // Throttle mask redraw ~20fps
     const now = performance.now();
     if (now - lastMaskUpdateRef.current > 50) {
       lastMaskUpdateRef.current = now;
@@ -108,68 +110,93 @@ export default function Hero() {
       );
       if (isRevealed(cov, THRESHOLD)) {
         setRevealed(true);
-        setTimeout(() => setFadeOut(true), 3000);
+        setDragging(false);
+        setFlashPos(null);
+        window.dispatchEvent(new Event("avatar:resume"));
+        // After 4s of full reveal, fade big text back to default state
+        setTimeout(() => setFadeOut(true), 4000);
         setTimeout(() => {
-          setFadeOut(false);
-          setHideFlash(true);
-          setDragging(false);
-          window.dispatchEvent(new Event("avatar:resume"));
-        }, 4500);
+          // Reset visually (small text back, big text gone, flashlight back)
+          resetAll();
+        }, 6500);
       }
     }
   }
 
   function onDragStart() {
-    if (hideFlash || revealed) return;
+    if (revealed) return;
     setDragging(true);
     window.dispatchEvent(new Event("avatar:pause"));
   }
 
   function onDragEnd() {
     setDragging(false);
+    setFlashPos(null);
     if (!revealed) {
       window.dispatchEvent(new Event("avatar:resume"));
     }
   }
 
-  function dismissFlashlight(e: React.MouseEvent) {
-    e.preventDefault();
-    if (hideFlash) return;
-    setHideFlash(true);
+  function resetAll() {
+    setRevealed(false);
+    setFadeOut(false);
     setDragging(false);
+    setFlashPos(null);
     visitedPointsRef.current = [];
     setMaskUrl("");
+    // Animate flashlight back to origin and bump key so framer resets drag offset
+    flashControls.start({ x: 0, y: 0, transition: { duration: 0.5 } });
+    setResetKey((k) => k + 1);
     window.dispatchEvent(new Event("avatar:resume"));
   }
 
-  // Safety net: always resume avatar on unmount so other pages aren't left frozen
+  function onContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    resetAll();
+  }
+
+  // Safety: always resume avatar on unmount
   useEffect(() => {
     return () => {
       window.dispatchEvent(new Event("avatar:resume"));
     };
   }, []);
 
+  // Dark vignette radial-gradient for current flashlight position
+  const vignetteStyle =
+    dragging && flashPos
+      ? {
+          background: `radial-gradient(circle ${RADIUS * 1.4}px at ${flashPos.x}px ${flashPos.y}px, transparent 0%, transparent 45%, rgba(20,20,25,0.92) 100%)`,
+          opacity: 1,
+        }
+      : {
+          background:
+            "radial-gradient(circle 100px at 50% 50%, transparent 0%, rgba(20,20,25,0.92) 100%)",
+          opacity: 0,
+        };
+
   return (
     <section
       ref={sectionRef}
       id="hero"
-      onPointerMove={onPointerMove}
-      onContextMenu={dismissFlashlight}
+      onContextMenu={onContextMenu}
       className="relative min-h-screen flex flex-col justify-center items-center px-6 text-center overflow-hidden"
     >
-      {/* Offscreen canvas — only its dataURL is used as mask */}
+      {/* Offscreen mask canvas */}
       <canvas ref={maskCanvasRef} className="hidden" aria-hidden="true" />
 
-      {/* Small text (always fully visible, in normal flow) */}
-      <div className="relative z-[1] space-y-3">
+      {/* Small text — visible by default, hides when revealed */}
+      <div
+        className="relative z-[1] space-y-3"
+        style={{
+          opacity: revealed && !fadeOut ? 0 : 1,
+          transition: "opacity 0.8s",
+        }}
+      >
         {content.hook.lines.map((line, i) => (
           <p
             key={i}
             className="font-serif text-3xl md:text-5xl text-ink leading-relaxed tracking-wide"
-            style={{
-              opacity: revealed && !fadeOut ? 0 : 1,
-              transition: "opacity 1.2s",
-            }}
           >
             {typingLines[i] || ""}
             {!typingComplete && i === typingLines.length - 1 && (
@@ -179,10 +206,9 @@ export default function Hero() {
         ))}
       </div>
 
-      {/* Big revealed text — only visible where mask is opaque (scanned areas
-          or during reveal latch) */}
+      {/* Big text — only visible where scanned (via mask) or on full reveal */}
       <div
-        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[2]"
+        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[3]"
         style={{
           WebkitMaskImage:
             revealed && !fadeOut ? "none" : maskUrl ? `url(${maskUrl})` : "none",
@@ -190,9 +216,10 @@ export default function Hero() {
             revealed && !fadeOut ? "none" : maskUrl ? `url(${maskUrl})` : "none",
           WebkitMaskSize: "100% 100%",
           maskSize: "100% 100%",
-          opacity: revealed && !fadeOut ? 1 : maskUrl ? 1 : 0,
+          opacity:
+            revealed && !fadeOut ? 1 : dragging && maskUrl ? 1 : 0,
           transition:
-            revealed && !fadeOut ? "opacity 0.6s" : "opacity 0.3s",
+            revealed && !fadeOut ? "opacity 0.8s" : "opacity 0.3s",
         }}
       >
         <p className="font-serif text-5xl md:text-7xl text-ink leading-tight">
@@ -203,6 +230,12 @@ export default function Hero() {
         </p>
       </div>
 
+      {/* Dark vignette — covers Hero with a circular hole at flashlight position */}
+      <div
+        className="absolute inset-0 pointer-events-none z-[2] transition-opacity duration-500"
+        style={vignetteStyle}
+      />
+
       {/* Signature */}
       <div
         className={`relative z-[1] mt-24 text-sm font-sans text-muted tracking-widest transition-opacity duration-1000 ${
@@ -212,52 +245,51 @@ export default function Hero() {
         马泽闰 Mark · 2026
       </div>
 
-      {/* Flashlight — bottom-center with pulsing halo hook */}
-      {!hideFlash && typingComplete && (
+      {/* Draggable flashlight */}
+      {typingComplete && (
         <motion.div
+          key={resetKey}
           drag
           dragMomentum={false}
+          animate={flashControls}
+          onDrag={onDrag}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           initial={{ opacity: 0, y: 20 }}
-          animate={{
-            opacity: fadeOut ? 0 : 1,
-            y: 0,
-          }}
-          transition={{ duration: fadeOut ? 1.5 : 0.6, delay: 0.2 }}
-          whileDrag={{ scale: 1.1 }}
-          className="absolute bottom-32 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing select-none z-[3] flex flex-col items-center gap-2"
-          aria-label="手电筒——拖动我扫过文字，右键收起"
+          whileDrag={{ scale: 1.15 }}
+          className="absolute bottom-32 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing select-none z-[4] flex flex-col items-center gap-2"
+          style={{ opacity: 1 }}
+          aria-label="手电筒——拖动我扫过文字，右键复位"
         >
-          {!dragging && (
+          {!dragging && !revealed && (
             <>
               <span
                 className="absolute pointer-events-none rounded-full"
                 style={{
                   background:
-                    "radial-gradient(circle, rgba(255,220,150,0.5) 0%, transparent 70%)",
+                    "radial-gradient(circle, rgba(255,220,150,0.55) 0%, transparent 70%)",
                   animation: "flashlightPulse 1.8s ease-in-out infinite",
-                  width: 80,
-                  height: 80,
-                  top: -24,
-                  left: -24,
+                  width: 90,
+                  height: 90,
+                  top: -28,
+                  left: -28,
                 }}
               />
               <span
                 className="absolute pointer-events-none rounded-full border border-accent/50"
                 style={{
                   animation: "flashlightRing 1.8s ease-out infinite",
-                  width: 80,
-                  height: 80,
-                  top: -24,
-                  left: -24,
+                  width: 90,
+                  height: 90,
+                  top: -28,
+                  left: -28,
                 }}
               />
             </>
           )}
           <span className="text-4xl relative z-[1]">🔦</span>
           <span className="font-sans text-[10px] text-muted tracking-widest whitespace-nowrap pointer-events-none">
-            拖动我 · 右键收起
+            拖动我 · 右键复位
           </span>
         </motion.div>
       )}
