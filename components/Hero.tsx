@@ -46,16 +46,22 @@ export default function Hero() {
   );
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
-  // One-way latch: once user has seen the full reveal, the flashlight
-  // becomes dormant (no more halo, no more scan tracking).
   const [completed, setCompleted] = useState(false);
 
-  // Motion values driven both by user drag (framer updates them automatically
-  // while drag is active) and by our endReveal / resetAll animations.
+  // Motion values for the flashlight's offset from its CSS-centered origin
   const flashX = useMotionValue(0);
   const flashY = useMotionValue(0);
   const flashRotate = useMotionValue(0);
   const flashOpacity = useMotionValue(1);
+  const flashScale = useMotionValue(1);
+
+  // Drag bookkeeping (our own, not framer's)
+  const dragStartRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    origX: number;
+    origY: number;
+  } | null>(null);
 
   const rebuildMask = useCallback(() => {
     const canvas = maskCanvasRef.current;
@@ -82,11 +88,11 @@ export default function Hero() {
     setMaskUrl(canvas.toDataURL());
   }, []);
 
-  function onDrag(_e: unknown, info: { point: { x: number; y: number } }) {
+  function recordScanPoint(clientX: number, clientY: number) {
     if (revealed || completed || !sectionRef.current || !typingComplete) return;
     const rect = sectionRef.current.getBoundingClientRect();
-    const x = info.point.x - rect.left;
-    const y = info.point.y - rect.top;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     setFlashPos({ x, y });
 
     const prev = visitedPointsRef.current[visitedPointsRef.current.length - 1];
@@ -115,25 +121,62 @@ export default function Hero() {
         setRevealed(true);
         setDragging(false);
         setFlashPos(null);
+        dragStartRef.current = null;
         window.dispatchEvent(new Event("avatar:resume"));
         void endReveal();
       }
     }
   }
 
-  // After the big text has been on screen long enough, play the "drop"
-  // sequence: flashlight falls, returns to origin, halo extinguishes.
+  function onPointerDown(e: React.PointerEvent) {
+    if (revealed || completed || !typingComplete) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragStartRef.current = {
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      origX: flashX.get(),
+      origY: flashY.get(),
+    };
+    setDragging(true);
+    animate(flashScale, 1.15, { duration: 0.15 });
+    window.dispatchEvent(new Event("avatar:pause"));
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragStartRef.current) return;
+    const dx = e.clientX - dragStartRef.current.pointerX;
+    const dy = e.clientY - dragStartRef.current.pointerY;
+    flashX.set(dragStartRef.current.origX + dx);
+    flashY.set(dragStartRef.current.origY + dy);
+    recordScanPoint(e.clientX, e.clientY);
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    if (!dragStartRef.current) return;
+    dragStartRef.current = null;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+    setDragging(false);
+    setFlashPos(null);
+    animate(flashScale, 1, { duration: 0.2 });
+    if (!revealed) {
+      window.dispatchEvent(new Event("avatar:resume"));
+    }
+  }
+
   async function endReveal() {
     await new Promise((r) => setTimeout(r, 1500));
-
-    // Fade out big text + restore small text
     setFadeOut(true);
     await new Promise((r) => setTimeout(r, 900));
 
-    // Drop — animate all three motion values concurrently, await the slowest
-    animate(flashY, 180, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
+    // Drop
     animate(flashRotate, 28, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
-    await animate(flashOpacity, 0.55, {
+    animate(flashOpacity, 0.55, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
+    await animate(flashY, flashY.get() + 140, {
       duration: 0.55,
       ease: [0.4, 0, 0.6, 1],
     });
@@ -143,6 +186,7 @@ export default function Hero() {
     animate(flashX, 0, { duration: 0.45, ease: "easeOut" });
     animate(flashRotate, 0, { duration: 0.45, ease: "easeOut" });
     animate(flashOpacity, 1, { duration: 0.45, ease: "easeOut" });
+    animate(flashScale, 1, { duration: 0.45, ease: "easeOut" });
     await animate(flashY, 0, { duration: 0.45, ease: "easeOut" });
 
     setRevealed(false);
@@ -155,31 +199,19 @@ export default function Hero() {
     window.dispatchEvent(new Event("avatar:resume"));
   }
 
-  function onDragStart() {
-    if (revealed || completed) return;
-    setDragging(true);
-    window.dispatchEvent(new Event("avatar:pause"));
-  }
-
-  function onDragEnd() {
-    setDragging(false);
-    setFlashPos(null);
-    if (!revealed) {
-      window.dispatchEvent(new Event("avatar:resume"));
-    }
-  }
-
   function resetAll() {
     setRevealed(false);
     setFadeOut(false);
     setDragging(false);
     setFlashPos(null);
+    dragStartRef.current = null;
     visitedPointsRef.current = [];
     setMaskUrl("");
     animate(flashX, 0, { duration: 0.5 });
     animate(flashY, 0, { duration: 0.5 });
     animate(flashRotate, 0, { duration: 0.5 });
     animate(flashOpacity, 1, { duration: 0.3 });
+    animate(flashScale, 1, { duration: 0.3 });
     window.dispatchEvent(new Event("avatar:resume"));
   }
 
@@ -205,7 +237,6 @@ export default function Hero() {
     >
       <canvas ref={maskCanvasRef} className="hidden" aria-hidden="true" />
 
-      {/* Small text */}
       <div
         className="relative z-[1] space-y-3 transition-opacity"
         style={{
@@ -226,7 +257,6 @@ export default function Hero() {
         ))}
       </div>
 
-      {/* Night overlay */}
       <div
         className="absolute inset-0 pointer-events-none z-[2] transition-opacity duration-500"
         style={{
@@ -235,7 +265,6 @@ export default function Hero() {
         }}
       />
 
-      {/* Flashlight beam */}
       {dragging && flashPos && (
         <div
           className="absolute inset-0 pointer-events-none z-[3]"
@@ -245,7 +274,6 @@ export default function Hero() {
         />
       )}
 
-      {/* Big white text, masked */}
       <div
         className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[4]"
         style={{
@@ -256,11 +284,7 @@ export default function Hero() {
           WebkitMaskSize: "100% 100%",
           maskSize: "100% 100%",
           opacity:
-            revealed && !fadeOut
-              ? 1
-              : nightActive && maskUrl
-              ? 1
-              : 0,
+            revealed && !fadeOut ? 1 : nightActive && maskUrl ? 1 : 0,
           transition: fadeOut ? "opacity 1s" : "opacity 0.3s",
         }}
       >
@@ -278,7 +302,6 @@ export default function Hero() {
         </p>
       </div>
 
-      {/* Signature */}
       <div
         className={`relative z-[1] mt-24 text-sm font-sans text-muted tracking-widest transition-opacity duration-1000 ${
           typingComplete && !nightActive ? "opacity-100" : "opacity-0"
@@ -287,70 +310,71 @@ export default function Hero() {
         马泽闰 Mark · 2026
       </div>
 
-      {/* Flashlight — wrapped in a flex container so horizontal centering
-          is handled by CSS (not transform), leaving framer-motion's x/y
-          free to animate drag + reset without conflict. */}
       {typingComplete && (
         <div className="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none z-[80]">
-        <motion.div
-          drag={!completed && !revealed}
-          dragMomentum={false}
-          onDrag={onDrag}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          whileDrag={{ scale: 1.15 }}
-          className="pointer-events-auto cursor-grab active:cursor-grabbing select-none flex flex-col items-center gap-2"
-          style={{
-            x: flashX,
-            y: flashY,
-            rotate: flashRotate,
-            opacity: flashOpacity,
-          }}
-          aria-label="手电筒——拖动我扫过文字，右键复位"
-        >
-          {!dragging && !revealed && !completed && (
-            <>
-              <span
-                className="absolute pointer-events-none rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle, rgba(255,220,150,0.55) 0%, transparent 70%)",
-                  animation: "flashlightPulse 1.8s ease-in-out infinite",
-                  width: 90,
-                  height: 90,
-                  top: -28,
-                  left: -28,
-                }}
-              />
-              <span
-                className="absolute pointer-events-none rounded-full border border-accent/50"
-                style={{
-                  animation: "flashlightRing 1.8s ease-out infinite",
-                  width: 90,
-                  height: 90,
-                  top: -28,
-                  left: -28,
-                }}
-              />
-            </>
-          )}
-          <span
-            className="text-4xl relative z-[1] transition-all duration-500"
+          <motion.div
+            onPointerDown={
+              completed || revealed ? undefined : onPointerDown
+            }
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={`pointer-events-auto select-none flex flex-col items-center gap-2 ${
+              completed ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+            }`}
             style={{
-              filter: completed ? "grayscale(0.6) brightness(0.85)" : "none",
+              x: flashX,
+              y: flashY,
+              rotate: flashRotate,
+              opacity: flashOpacity,
+              scale: flashScale,
+              touchAction: "none",
             }}
+            aria-label="手电筒——拖动我扫过文字，右键复位"
           >
-            🔦
-          </span>
-          {!completed && (
+            {!dragging && !revealed && !completed && (
+              <>
+                <span
+                  className="absolute pointer-events-none rounded-full"
+                  style={{
+                    background:
+                      "radial-gradient(circle, rgba(255,220,150,0.55) 0%, transparent 70%)",
+                    animation: "flashlightPulse 1.8s ease-in-out infinite",
+                    width: 90,
+                    height: 90,
+                    top: -28,
+                    left: -28,
+                  }}
+                />
+                <span
+                  className="absolute pointer-events-none rounded-full border border-accent/50"
+                  style={{
+                    animation: "flashlightRing 1.8s ease-out infinite",
+                    width: 90,
+                    height: 90,
+                    top: -28,
+                    left: -28,
+                  }}
+                />
+              </>
+            )}
             <span
-              className="font-sans text-[10px] tracking-widest whitespace-nowrap pointer-events-none"
-              style={{ color: nightActive ? "#ccc" : "#888" }}
+              className="text-4xl relative z-[1] transition-all duration-500"
+              style={{
+                filter: completed ? "grayscale(0.6) brightness(0.85)" : "none",
+              }}
             >
-              拖动我 · 右键复位
+              🔦
             </span>
-          )}
-        </motion.div>
+            {!completed && (
+              <span
+                className="font-sans text-[10px] tracking-widest whitespace-nowrap pointer-events-none"
+                style={{ color: nightActive ? "#ccc" : "#888" }}
+              >
+                拖动我 · 右键复位
+              </span>
+            )}
+          </motion.div>
         </div>
       )}
     </section>
