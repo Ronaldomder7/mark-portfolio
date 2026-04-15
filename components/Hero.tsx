@@ -288,9 +288,11 @@ export default function Hero() {
         马泽闰 Mark · 2026
       </div>
 
-      {/* Flashlight — no framer-motion initial/opacity, let style handle
-          entrance via CSS transition. z-[80] to sit above FloatingArrow (z-60). */}
+      {/* Flashlight — wrapped in a flex container so horizontal centering
+          is handled by CSS (not transform), leaving framer-motion's x/y
+          free to animate drag + reset without conflict. */}
       {typingComplete && (
+        <div className="absolute bottom-28 left-0 right-0 flex justify-center pointer-events-none z-[80]">
         <motion.div
           drag={!completed}
           dragMomentum={false}
@@ -299,7 +301,7 @@ export default function Hero() {
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           whileDrag={{ scale: 1.15 }}
-          className="absolute bottom-28 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing select-none z-[80] flex flex-col items-center gap-2"
+          className="pointer-events-auto cursor-grab active:cursor-grabbing select-none flex flex-col items-center gap-2"
           style={{ opacity: 1 }}
           aria-label="手电筒——拖动我扫过文字，右键复位"
         >
@@ -346,6 +348,7 @@ export default function Hero() {
             </span>
           )}
         </motion.div>
+        </div>
       )}
     </section>
   );

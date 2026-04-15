@@ -48,8 +48,10 @@ export default function FloatingArrow() {
       // Positioned bottom-right on desktop so it doesn't fight with the
       // centered flashlight in Hero; centered at bottom on small screens
       // where horizontal space is tight.
-      className="fixed bottom-8 right-8 md:right-12 z-[60] transition-all duration-500"
-      style={{ opacity: 0.4 }}
+      // Bottom-left so it doesn't collide with the 3D avatar character
+      // which parks at bottom-right by default.
+      className="fixed bottom-8 left-8 md:left-12 z-[70] transition-all duration-500"
+      style={{ opacity: 0.55 }}
     >
       <div
         className="w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-sm"
