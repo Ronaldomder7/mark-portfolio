@@ -292,9 +292,9 @@ export default function Hero() {
           is handled by CSS (not transform), leaving framer-motion's x/y
           free to animate drag + reset without conflict. */}
       {typingComplete && (
-        <div className="absolute bottom-28 left-0 right-0 flex justify-center pointer-events-none z-[80]">
+        <div className="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none z-[80]">
         <motion.div
-          drag={!completed}
+          drag={!completed && !revealed}
           dragMomentum={false}
           animate={flashControls}
           onDrag={onDrag}
