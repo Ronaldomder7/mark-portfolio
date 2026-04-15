@@ -34,6 +34,22 @@ export interface KnowledgeSystem {
   tagline: string;
 }
 
+export interface ExperienceWork {
+  title: string;
+  metric: string;
+}
+
+export interface ExperienceProject {
+  num: string;
+  period: string;
+  title: string;
+  titleEn: string;
+  summary: string;
+  highlights: string[];
+  assets: string[];
+  works?: ExperienceWork[];
+}
+
 export interface StaticContent {
   hook: Hook;
   beliefs: Belief[];
@@ -41,6 +57,7 @@ export interface StaticContent {
   thoughtPieces: ThoughtPiece[];
   dataMetrics: DataMetric[];
   works: Work[];
+  experience: ExperienceProject[];
   knowledgeSystem: KnowledgeSystem;
   footer: { quote: string; contact: { wechat: string; email: string } };
 }

@@ -46,6 +46,69 @@
       "requestUrl": "#contact-wechat"
     }
   ],
+  "experience": [
+    {
+      "num": "01",
+      "period": "2024.06 - 至今",
+      "title": "个人自媒体",
+      "titleEn": "PERSONAL MEDIA",
+      "summary": "抖音 2 万粉 · 百万爆款 · 5 位数广告营收",
+      "highlights": [
+        "抖音单月 2 万粉丝",
+        "创作出多个百万爆款视频",
+        "广告营收 5 位数"
+      ],
+      "assets": []
+    },
+    {
+      "num": "02",
+      "period": "2024.10 - 至今",
+      "title": "行动营主理（4 次）",
+      "titleEn": "CAMP LEADER",
+      "summary": "4,375 人累计带教",
+      "highlights": [
+        "《AI短视频自媒体AIP打造》主教练 · 1210 人",
+        "《视频号&小红书AI短视频影响力》主教练 · 264 人",
+        "《AI工作流创始人IP打造》主教练 · 235 人",
+        "《AI一人公司内容自动化》主教练 · 2666 人"
+      ],
+      "assets": [
+        "/camps/camp-01.jpg",
+        "/camps/camp-02.jpg",
+        "/camps/camp-03.jpg",
+        "/camps/camp-04.jpg"
+      ]
+    },
+    {
+      "num": "03",
+      "period": "2025.03 - 2025.06",
+      "title": "MCN 操盘",
+      "titleEn": "MCN OPERATIONS",
+      "summary": "统筹学员/教练/助教 · 奖励体系",
+      "highlights": [
+        "统筹学员 / 教练 / 助教",
+        "奖励体系搭建"
+      ],
+      "assets": []
+    },
+    {
+      "num": "04",
+      "period": "2025.07 - 至今",
+      "title": "IP 操盘手",
+      "titleEn": "IP COMMANDER",
+      "summary": "月成交万单 · ROI 0.18 · 月 GMV 100万+",
+      "highlights": [
+        "在 Obsidian 知识库搭建了整个营销系统",
+        "用户调研和分层 → IP 策划和脚本 → 拍摄和剪辑 → 投放和复盘"
+      ],
+      "works": [
+        { "title": "代表作品 01", "metric": "出单 5,248 · ROI 0.16" },
+        { "title": "代表作品 02", "metric": "出单 536 · ROI 0.36" },
+        { "title": "代表作品 03", "metric": "单月产出 114 条" }
+      ],
+      "assets": []
+    }
+  ],
   "knowledgeSystem": {
     "stats": [
       "2,338 篇 Obsidian 笔记",
