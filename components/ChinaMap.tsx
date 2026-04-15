@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
 import cities from "@/content/cities.json";
 import { CHINA_PROVINCES } from "@/lib/china-map-data";
+import MapGesturePrompt from "./MapGesturePrompt";
+import { useHandTracking } from "./useHandTracking";
 
 interface City {
   name: string;
@@ -67,11 +69,23 @@ const PROVINCE_LABEL_TO_FULL: Record<string, string> = {
   "北京": "北京市", "河北": "河北省", "湖北": "湖北省",
 };
 
+// SVG viewBox used for the map: x=80, y=-20, width=W-100, height=H+20
+const VIEW_X = 80;
+const VIEW_Y = -20;
+const VIEW_W = W - 100;
+const VIEW_H = H + 20;
+
 export default function ChinaMap() {
   const [selected, setSelected] = useState<City | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [hoveredCity, setHoveredCity] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [gestureMode, setGestureMode] = useState<"none" | "camera" | "mouse">("none");
+  const [burstId, setBurstId] = useState(0);
+
+  const mapRef = useRef<HTMLDivElement>(null);
+
+  const { hand, videoRef } = useHandTracking(gestureMode === "camera");
 
   const selectCity = useCallback((city: City) => {
     setSelected(city);
@@ -95,11 +109,50 @@ export default function ChinaMap() {
 
   const typedCities = cities as City[];
 
-  // Memoize projected city positions
+  // Memoize projected city positions (in SVG viewBox coords)
   const cityPositions = useMemo(
     () => typedCities.map((c) => ({ ...c, pos: project(c.lat, c.lng) })),
     [typedCities]
   );
+
+  // Whenever hoveredCity changes to a new non-null city, bump burstId so particle effect restarts
+  useEffect(() => {
+    if (hoveredCity) setBurstId((b) => b + 1);
+  }, [hoveredCity]);
+
+  // Hand tracking → hovered city + fist gallery control
+  useEffect(() => {
+    if (gestureMode !== "camera") return;
+    if (!hand) return;
+
+    // Map normalized hand.x/y (0..1) into SVG viewBox coordinate space,
+    // then pick the nearest city by projected SVG coords.
+    const targetX = VIEW_X + hand.x * VIEW_W;
+    const targetY = VIEW_Y + hand.y * VIEW_H;
+
+    let nearest: (typeof cityPositions)[number] | null = null;
+    let nearestDist = Infinity;
+    for (const c of cityPositions) {
+      const dx = c.pos.x - targetX;
+      const dy = c.pos.y - targetY;
+      const d = dx * dx + dy * dy;
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = c;
+      }
+    }
+    if (nearest && nearest.name !== hoveredCity) {
+      setHoveredCity(nearest.name);
+    }
+
+    // Fist: open gallery for hovered city. Release: close.
+    if (hand.isFist && !selected && nearest) {
+      selectCity(nearest);
+    } else if (!hand.isFist && selected) {
+      setSelected(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hand, gestureMode]);
 
   return (
     <>
@@ -114,12 +167,44 @@ export default function ChinaMap() {
 
           {/* Map container */}
           <div
+            ref={mapRef}
             className="relative w-full rounded-2xl overflow-hidden"
             style={{
               background: "linear-gradient(145deg, #0d1117 0%, #161b22 50%, #0d1117 100%)",
               boxShadow: "0 0 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)",
             }}
           >
+            {/* Gesture opt-in prompt */}
+            {mounted && gestureMode === "none" && (
+              <MapGesturePrompt
+                onAllow={() => setGestureMode("camera")}
+                onDeny={() => setGestureMode("mouse")}
+              />
+            )}
+
+            {/* Camera mode: video preview + hand position overlay */}
+            {gestureMode === "camera" && (
+              <div className="absolute top-4 left-4 z-10 w-48 aspect-video border border-line rounded-sm overflow-hidden bg-black">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scaleX(-1)" }}
+                  muted
+                  playsInline
+                />
+                {hand && (
+                  <div
+                    className="absolute w-6 h-6 border-2 border-accent rounded-full pointer-events-none"
+                    style={{
+                      left: `${hand.x * 100}%`,
+                      top: `${hand.y * 100}%`,
+                      transform: "translate(-50%, -50%)",
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
             {/* Vignette overlay */}
             <div
               className="absolute inset-0 pointer-events-none"
@@ -131,7 +216,7 @@ export default function ChinaMap() {
 
             {/* Main SVG: provinces + labels + dots + effects */}
             <svg
-              viewBox={`80 -20 ${W - 100} ${H + 20}`}
+              viewBox={`${VIEW_X} ${VIEW_Y} ${VIEW_W} ${VIEW_H}`}
               className="w-full h-auto relative"
               style={{ display: "block", zIndex: 2 }}
             >
@@ -264,8 +349,12 @@ export default function ChinaMap() {
                       filter={isBeijing ? "url(#beijing-glow)" : "url(#dot-glow)"}
                       className="transition-all duration-300 cursor-pointer"
                       onClick={() => selectCity(city)}
-                      onMouseEnter={() => setHoveredCity(city.name)}
-                      onMouseLeave={() => setHoveredCity(null)}
+                      onMouseEnter={() => {
+                        if (gestureMode !== "camera") setHoveredCity(city.name);
+                      }}
+                      onMouseLeave={() => {
+                        if (gestureMode !== "camera") setHoveredCity(null);
+                      }}
                       style={{ cursor: "pointer" }}
                     />
 
@@ -290,6 +379,40 @@ export default function ChinaMap() {
                 );
               })}
             </svg>
+
+            {/* Particle burst overlay (HTML layer, positioned over the SVG) */}
+            {mounted && hoveredCity && (() => {
+              const city = cityPositions.find((c) => c.name === hoveredCity);
+              if (!city) return null;
+              // Convert city SVG coords to % of viewBox so overlay scales with container
+              const leftPct = ((city.pos.x - VIEW_X) / VIEW_W) * 100;
+              const topPct = ((city.pos.y - VIEW_Y) / VIEW_H) * 100;
+              return (
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{ zIndex: 3 }}
+                >
+                  {Array.from({ length: 24 }).map((_, i) => {
+                    const angle = i * 15;
+                    return (
+                      <span
+                        key={`${hoveredCity}-${burstId}-${i}`}
+                        className="absolute block w-1 h-1 bg-accent rounded-full"
+                        style={{
+                          left: `${leftPct}%`,
+                          top: `${topPct}%`,
+                          // @ts-expect-error --angle is a custom CSS property
+                          "--angle": `${angle}deg`,
+                          animation: "particle-burst 0.8s ease-out forwards",
+                          animationDelay: `${i * 10}ms`,
+                          transformOrigin: "center",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Bottom info bar */}
             <div

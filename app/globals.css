@@ -88,3 +88,9 @@ html, body {
   0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
   50% { transform: translateY(-10px) scale(1.2); opacity: 1; }
 }
+
+/* Particle burst on city hover */
+@keyframes particle-burst {
+  0% { opacity: 1; transform: rotate(var(--angle)) translateY(0); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateY(-40px); }
+}
