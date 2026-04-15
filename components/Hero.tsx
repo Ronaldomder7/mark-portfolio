@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, useAnimation } from "framer-motion";
+import { motion, useMotionValue, animate } from "framer-motion";
 import staticContent from "@/content/static.json";
 import type { StaticContent } from "@/lib/types";
 import {
@@ -50,7 +50,12 @@ export default function Hero() {
   // becomes dormant (no more halo, no more scan tracking).
   const [completed, setCompleted] = useState(false);
 
-  const flashControls = useAnimation();
+  // Motion values driven both by user drag (framer updates them automatically
+  // while drag is active) and by our endReveal / resetAll animations.
+  const flashX = useMotionValue(0);
+  const flashY = useMotionValue(0);
+  const flashRotate = useMotionValue(0);
+  const flashOpacity = useMotionValue(1);
 
   const rebuildMask = useCallback(() => {
     const canvas = maskCanvasRef.current;
@@ -119,32 +124,27 @@ export default function Hero() {
   // After the big text has been on screen long enough, play the "drop"
   // sequence: flashlight falls, returns to origin, halo extinguishes.
   async function endReveal() {
-    // Let the big text sit on dark background ~1.5s
     await new Promise((r) => setTimeout(r, 1500));
 
     // Fade out big text + restore small text
     setFadeOut(true);
     await new Promise((r) => setTimeout(r, 900));
 
-    // Drop: flashlight pitches forward and down like gravity took over
-    await flashControls.start({
-      y: 180,
-      rotate: 28,
-      opacity: 0.55,
-      transition: { duration: 0.55, ease: [0.4, 0, 0.6, 1] },
+    // Drop — animate all three motion values concurrently, await the slowest
+    animate(flashY, 180, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
+    animate(flashRotate, 28, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
+    await animate(flashOpacity, 0.55, {
+      duration: 0.55,
+      ease: [0.4, 0, 0.6, 1],
     });
     await new Promise((r) => setTimeout(r, 200));
 
-    // Slide/pop back to origin
-    await flashControls.start({
-      x: 0,
-      y: 0,
-      rotate: 0,
-      opacity: 1,
-      transition: { duration: 0.45, ease: "easeOut" },
-    });
+    // Reset to origin
+    animate(flashX, 0, { duration: 0.45, ease: "easeOut" });
+    animate(flashRotate, 0, { duration: 0.45, ease: "easeOut" });
+    animate(flashOpacity, 1, { duration: 0.45, ease: "easeOut" });
+    await animate(flashY, 0, { duration: 0.45, ease: "easeOut" });
 
-    // Final state: flashlight is present but dormant (no halo, no scan)
     setRevealed(false);
     setFadeOut(false);
     setDragging(false);
@@ -176,11 +176,10 @@ export default function Hero() {
     setFlashPos(null);
     visitedPointsRef.current = [];
     setMaskUrl("");
-    flashControls.start({
-      x: 0,
-      y: 0,
-      transition: { duration: 0.5 },
-    });
+    animate(flashX, 0, { duration: 0.5 });
+    animate(flashY, 0, { duration: 0.5 });
+    animate(flashRotate, 0, { duration: 0.5 });
+    animate(flashOpacity, 1, { duration: 0.3 });
     window.dispatchEvent(new Event("avatar:resume"));
   }
 
@@ -296,13 +295,17 @@ export default function Hero() {
         <motion.div
           drag={!completed && !revealed}
           dragMomentum={false}
-          animate={flashControls}
           onDrag={onDrag}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           whileDrag={{ scale: 1.15 }}
           className="pointer-events-auto cursor-grab active:cursor-grabbing select-none flex flex-col items-center gap-2"
-          style={{ opacity: 1 }}
+          style={{
+            x: flashX,
+            y: flashY,
+            rotate: flashRotate,
+            opacity: flashOpacity,
+          }}
           aria-label="手电筒——拖动我扫过文字，右键复位"
         >
           {!dragging && !revealed && !completed && (
