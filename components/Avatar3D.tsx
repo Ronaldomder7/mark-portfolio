@@ -253,11 +253,7 @@ export default function Avatar3D({ onChatOpen, chatOpen }: Avatar3DProps) {
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
-      <Suspense
-        fallback={
-          <AvatarCompanion onChatOpen={onChatOpen} chatOpen={chatOpen} />
-        }
-      >
+      <Suspense fallback={null}>
         <Canvas
           style={{ background: "transparent", pointerEvents: "auto" }}
           gl={{ alpha: true, antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
