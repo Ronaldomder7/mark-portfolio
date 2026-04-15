@@ -1,13 +1,55 @@
 "use client";
 
-import { Suspense, useRef, useEffect, useState, useCallback } from "react";
+import { Suspense, useRef, useEffect, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, useAnimations, Html } from "@react-three/drei";
 import { useAvatarState, type Animation } from "./useAvatarState";
 import * as THREE from "three";
 import AvatarCompanion from "./AvatarCompanion";
 
-// --- Inner 3D model component (renders inside Canvas) ---
+// Map state machine names → GLB animation names
+const ANIM_MAP: Record<Animation, string> = {
+  idle: "idle",
+  walk: "walk",
+  wave: "wave",
+  sit: "sit",
+  sleep: "sleep",
+  jump: "jump",
+  dance: "dance",
+  silly: "silly",
+  robot: "robot",
+  freeze: "freeze",
+  thinking: "thinking",
+  bored: "bored",
+  excited: "excited",
+  happy: "happy",
+};
+
+// One-shot animations: play through once then hold the final frame.
+// Used for short gestures so sequence transitions look natural.
+const ONE_SHOT_ANIMATIONS = new Set([
+  "wave", "jump", "excited", "happy", "bored", "thinking", "freeze",
+]);
+
+// Per-animation Y rotation offset — "walk" was downloaded With Skin facing
+// camera; all other Without-Skin exports end up 180° flipped after merge.
+const Y_ROT_OFFSET: Record<Animation, number> = {
+  walk: 0,
+  idle: Math.PI,
+  wave: Math.PI,
+  sit: Math.PI,
+  sleep: Math.PI,
+  jump: Math.PI,
+  dance: Math.PI,
+  silly: Math.PI,
+  robot: Math.PI,
+  freeze: Math.PI,
+  thinking: Math.PI,
+  bored: Math.PI,
+  excited: Math.PI,
+  happy: Math.PI,
+};
+
 
 function AstronautModel({
   animation,
@@ -24,68 +66,124 @@ function AstronautModel({
   onAvatarClick: () => void;
   showBubble: boolean;
 }) {
-  const { scene, animations } = useGLTF("/astronaut.glb");
+  const { scene, animations } = useGLTF("/astronaut-ai.glb", true, true);
   const group = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(animations, group);
+  const modelRef = useRef<THREE.Group>(null);
+  const rotRef = useRef<THREE.Group>(null);
+  const shadowRef = useRef<THREE.Mesh>(null);
   const { viewport } = useThree();
+  const { actions } = useAnimations(animations, modelRef);
+
+  // Enhance materials
+  useEffect(() => {
+    scene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && obj.material) {
+        const mat = obj.material as THREE.MeshStandardMaterial;
+        mat.roughness = 0.55;
+        mat.metalness = 0.05;
+        mat.needsUpdate = true;
+      }
+    });
+  }, [scene]);
 
   // Switch animation based on state
   useEffect(() => {
-    // Fade out all current animations
-    Object.values(actions).forEach((a) => a?.fadeOut(0.3));
-
-    const current = actions[animation];
-    if (current) {
-      current.reset().fadeIn(0.3).play();
-      if (animation === "wave") {
-        current.setLoop(THREE.LoopOnce, 1);
-        current.clampWhenFinished = true;
-      } else {
-        current.setLoop(THREE.LoopRepeat, Infinity);
-      }
+    const targetName = ANIM_MAP[animation];
+    const target = actions[targetName];
+    if (!target) {
+      console.warn(`[Avatar3D] Animation "${targetName}" not found. Available:`, Object.keys(actions));
+      return;
     }
+
+    // Fade out all others, fade in target
+    Object.entries(actions).forEach(([name, a]) => {
+      if (!a) return;
+      if (name === targetName) {
+        a.reset().fadeIn(0.3).play();
+        if (ONE_SHOT_ANIMATIONS.has(animation)) {
+          a.setLoop(THREE.LoopOnce, 1);
+          a.clampWhenFinished = true;
+        } else {
+          a.setLoop(THREE.LoopRepeat, Infinity);
+        }
+      } else {
+        a.fadeOut(0.3);
+      }
+    });
   }, [animation, actions]);
 
-  // Convert screen position to 3D world coords (orthographic)
   useFrame(() => {
-    if (!group.current) return;
-    // Map screen pixels to world units
-    const worldX =
-      (posX / window.innerWidth - 0.5) * viewport.width;
-    const worldY =
-      -(posY / window.innerHeight - 0.5) * viewport.height;
+    if (!group.current || !modelRef.current) return;
 
-    // Smooth lerp for position
-    group.current.position.x +=
-      (worldX - group.current.position.x) * 0.15;
-    group.current.position.y +=
-      (worldY - group.current.position.y) * 0.15;
+    // Position lerp toward mouse
+    const worldX = (posX / window.innerWidth - 0.5) * viewport.width;
+    const worldY = -(posY / window.innerHeight - 0.5) * viewport.height;
+    group.current.position.x += (worldX - group.current.position.x) * 0.1;
+    group.current.position.y += (worldY - group.current.position.y) * 0.1;
 
-    // Facing direction
-    const targetRotY = facingLeft ? Math.PI : 0;
-    group.current.rotation.y +=
-      (targetRotY - group.current.rotation.y) * 0.1;
+    // Facing: scaleX flip for walk direction
+    const targetScaleX = facingLeft ? -1 : 1;
+    group.current.scale.x += (targetScaleX - group.current.scale.x) * 0.12;
+
+    // Per-animation Y rotation offset (handles walk vs idle/sit/sleep facing)
+    if (rotRef.current) {
+      const target = Y_ROT_OFFSET[animation] ?? 0;
+      let diff = target - rotRef.current.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      rotRef.current.rotation.y += diff * 0.12;
+    }
+
+
+    // Ground shadow fade based on animation state
+    if (shadowRef.current) {
+      const mat = shadowRef.current.material as THREE.MeshBasicMaterial;
+      const targetOpacity = animation === "sleep" ? 0.15 : animation === "sit" ? 0.2 : 0.28;
+      mat.opacity += (targetOpacity - mat.opacity) * 0.1;
+    }
   });
 
   return (
     <group ref={group}>
-      <primitive
-        object={scene}
-        scale={0.5}
-        onClick={(e: any) => {
-          e.stopPropagation();
-          onAvatarClick();
-        }}
-        onPointerOver={() => {
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = "";
-        }}
-      />
-      {/* Speech bubble attached to 3D model */}
+      {/* Ground shadow */}
+      <mesh
+        ref={shadowRef}
+        position={[0, 0.005, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[0.5, 32]} />
+        <meshBasicMaterial
+          color="#000000"
+          transparent
+          opacity={0.28}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* The rigged model — outer group handles animations, inner group rotates to face camera */}
+      <group ref={modelRef}>
+        <group ref={rotRef}>
+          <primitive
+            object={scene}
+            scale={1.2}
+            position={[0, 0, 0]}
+            onClick={(e: { stopPropagation: () => void }) => {
+              e.stopPropagation();
+              onAvatarClick();
+            }}
+            onPointerOver={() => {
+              document.body.style.cursor = "pointer";
+            }}
+            onPointerOut={() => {
+              document.body.style.cursor = "";
+            }}
+          />
+        </group>
+      </group>
+
+      {/* Speech bubble */}
       {showBubble && animation !== "sleep" && (
-        <Html position={[0, 1.2, 0]} center>
+        <Html position={[0, 1.8, 0]} center>
           <div
             className="pointer-events-none whitespace-nowrap"
             style={{
@@ -108,10 +206,7 @@ function AstronautModel({
   );
 }
 
-// Preload model
-useGLTF.preload("/astronaut.glb");
-
-// --- Main wrapper component ---
+useGLTF.preload("/astronaut-ai.glb", true, true);
 
 interface Avatar3DProps {
   onChatOpen: () => void;
@@ -128,36 +223,30 @@ export default function Avatar3D({ onChatOpen, chatOpen }: Avatar3DProps) {
     enabled: !chatOpen,
   });
 
-  // Check WebGL support
   useEffect(() => {
     try {
       const canvas = document.createElement("canvas");
-      const gl =
-        canvas.getContext("webgl2") || canvas.getContext("webgl");
+      const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
       if (!gl) setHasWebGL(false);
     } catch {
       setHasWebGL(false);
     }
   }, []);
 
-  // Hide bubble after 5s
   useEffect(() => {
     const t = setTimeout(() => setShowBubble(false), 5000);
     return () => clearTimeout(t);
   }, []);
 
-  // Responsive zoom
   const [zoom, setZoom] = useState(120);
   useEffect(() => {
-    const update = () => setZoom(window.innerWidth < 768 ? 64 : 120);
+    const update = () => setZoom(window.innerWidth < 768 ? 80 : 120);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
   if (chatOpen) return null;
-
-  // Fallback for no WebGL
   if (!hasWebGL) {
     return <AvatarCompanion onChatOpen={onChatOpen} chatOpen={chatOpen} />;
   }
@@ -171,12 +260,15 @@ export default function Avatar3D({ onChatOpen, chatOpen }: Avatar3DProps) {
       >
         <Canvas
           style={{ background: "transparent", pointerEvents: "auto" }}
-          gl={{ alpha: true, antialias: true }}
+          gl={{ alpha: true, antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
           orthographic
           camera={{ zoom, position: [0, 0, 10], near: 0.1, far: 100 }}
         >
-          <ambientLight intensity={0.6} />
-          <directionalLight position={[5, 5, 5]} intensity={0.8} />
+          <ambientLight intensity={0.9} />
+          <directionalLight position={[3, 4, 5]} intensity={1.8} />
+          <directionalLight position={[0, 1, 5]} intensity={1.0} />
+          <directionalLight position={[-3, 2, -3]} intensity={0.6} color="#cce0ff" />
+          <directionalLight position={[0, -3, 2]} intensity={0.5} />
           <AstronautModel
             animation={animation}
             posX={posX}

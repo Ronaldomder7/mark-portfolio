@@ -4,8 +4,11 @@ import { useState, useEffect, useRef, useCallback, useReducer } from "react";
 
 // --- Pure reducer (testable without DOM) ---
 
-export type Animation = "idle" | "walk" | "wave" | "sit" | "sleep";
-export type Zone = "beliefs" | "footer" | null;
+export type Animation =
+  | "idle" | "walk" | "wave" | "sit" | "sleep" | "jump"
+  | "dance" | "silly" | "robot" | "freeze"
+  | "thinking" | "bored" | "excited" | "happy";
+export type Zone = "hero" | "works" | "beliefs" | "mind" | "recent" | "timeline" | "map" | "guestbook" | "footer" | null;
 
 export interface AvatarStateData {
   animation: Animation;
@@ -19,13 +22,15 @@ export interface AvatarStateData {
 
 export type AvatarAction =
   | { type: "MOUSE_MOVE"; x: number; y: number }
+  | { type: "SET_POS"; x: number; y: number }
+  | { type: "SET_ANIM"; animation: Animation }
   | { type: "TICK" }
   | { type: "IDLE_TIMEOUT" }
   | { type: "SIT_TIMEOUT" }
   | { type: "SLEEP_TIMEOUT" }
   | { type: "CLICK" }
   | { type: "WAVE_DONE" }
-  | { type: "ZONE_ENTER"; zone: "beliefs" | "footer" }
+  | { type: "ZONE_ENTER"; zone: Exclude<Zone, null> }
   | { type: "ZONE_EXIT" };
 
 const SPEED = 6;
@@ -43,10 +48,27 @@ export function initialState(): AvatarStateData {
   };
 }
 
-const ZONE_ANIMATION: Record<string, Animation> = {
-  beliefs: "sit",
-  footer: "sleep",
+// Zone signature sequences — each zone plays a sequence of animations totaling ~5s
+// (except hero: just 2.5s wave, footer: skip to sleep directly)
+export interface SequenceStep {
+  animation: Animation;
+  duration: number; // ms
+}
+
+export const ZONE_SEQUENCE: Record<string, SequenceStep[]> = {
+  hero:      [{ animation: "wave", duration: 2500 }],                                         // 门面
+  works:     [{ animation: "dance", duration: 5000 }],                                        // 作品：Hip Hop
+  beliefs:   [{ animation: "thinking", duration: 3000 }, { animation: "bored", duration: 2000 }],// 思想
+  mind:      [{ animation: "silly", duration: 5000 }],                                        // 思考区
+  recent:    [{ animation: "excited", duration: 2500 }, { animation: "happy", duration: 2500 }],// 近期
+  timeline:  [{ animation: "walk", duration: 5000 }],                                         // 生长
+  map:       [{ animation: "happy", duration: 2500 }, { animation: "excited", duration: 2500 }],// 足迹
+  guestbook: [{ animation: "robot", duration: 5000 }],                                        // 留言
+  footer:    [],                                                                              // 页尾：跳过签名，直接 sleep
 };
+
+// Pool of animations randomly chosen for post-sleep "wake up" moments
+export const RANDOM_WAKE_POOL: Animation[] = ["wave", "happy", "freeze", "bored"];
 
 export function avatarReducer(
   state: AvatarStateData,
@@ -55,19 +77,20 @@ export function avatarReducer(
   switch (action.type) {
     case "MOUSE_MOVE": {
       const facingLeft = action.x < state.posX;
+      // Always switch to walk — mouse motion cancels wave/dance/anything else.
+      // We KEEP activeZone so when mouse stops we can return to the zone animation.
       return {
         ...state,
         animation: "walk",
         targetX: action.x,
         targetY: action.y,
         facingLeft,
-        // Mouse movement clears zone override
-        activeZone: null,
       };
     }
 
     case "TICK": {
-      if (state.animation !== "walk") return state;
+      // Always lerp position toward target (allows following mouse while in any zone)
+      if (state.animation === "wave") return state;
 
       const dx = state.targetX - state.posX;
       const dy = state.targetY - state.posY;
@@ -84,6 +107,18 @@ export function avatarReducer(
         posY: state.posY + (dy / dist) * SPEED,
       };
     }
+
+    case "SET_POS":
+      return {
+        ...state,
+        posX: action.x,
+        posY: action.y,
+        targetX: action.x,
+        targetY: action.y,
+      };
+
+    case "SET_ANIM":
+      return { ...state, animation: action.animation };
 
     case "IDLE_TIMEOUT":
       if (state.animation === "wave") return state;
@@ -105,17 +140,12 @@ export function avatarReducer(
       return { ...state, animation: "idle" };
 
     case "ZONE_ENTER": {
-      // Only override if currently idle/sit/sleep (not walking or waving)
-      if (state.animation === "walk" || state.animation === "wave")
-        return { ...state, activeZone: action.zone };
-      const anim = ZONE_ANIMATION[action.zone] || "idle";
-      return { ...state, animation: anim, activeZone: action.zone };
+      // Just track the active zone; the hook drives the animation sequence via SET_ANIM
+      return { ...state, activeZone: action.zone };
     }
 
     case "ZONE_EXIT":
-      if (state.animation === "walk" || state.animation === "wave")
-        return { ...state, activeZone: null };
-      return { ...state, animation: "idle", activeZone: null };
+      return { ...state, activeZone: null };
 
     default:
       return state;
@@ -145,19 +175,88 @@ export function useAvatarState({
 }: UseAvatarStateOptions): AvatarStateResult {
   const [state, dispatch] = useReducer(avatarReducer, undefined, initialState);
   const [mounted, setMounted] = useState(false);
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // All timers tracked in a single ref so both mouse and zone effects can coordinate
+  const timersRef = useRef({
+    idle: null as ReturnType<typeof setTimeout> | null,
+    sit: null as ReturnType<typeof setTimeout> | null,
+    sleep: null as ReturnType<typeof setTimeout> | null,
+    wave: null as ReturnType<typeof setTimeout> | null,
+    zoneHold: null as ReturnType<typeof setTimeout> | null,
+    jump: null as ReturnType<typeof setTimeout> | null,
+    chat: null as ReturnType<typeof setTimeout> | null,
+  });
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // ---- Shared helpers ----
+  const clearAllIdleTimers = useCallback(() => {
+    const t = timersRef.current;
+    if (t.idle) { clearTimeout(t.idle); t.idle = null; }
+    if (t.sit) { clearTimeout(t.sit); t.sit = null; }
+    if (t.sleep) { clearTimeout(t.sleep); t.sleep = null; }
+    if (t.wave) { clearTimeout(t.wave); t.wave = null; }
+    if (t.zoneHold) { clearTimeout(t.zoneHold); t.zoneHold = null; }
+  }, []);
+
+  // After sleep, periodically wake up with a random animation, then return to sleep
+  const scheduleRandomWake = useCallback(() => {
+    const t = timersRef.current;
+    t.wave = setTimeout(() => {
+      const pick = RANDOM_WAKE_POOL[Math.floor(Math.random() * RANDOM_WAKE_POOL.length)];
+      dispatch({ type: "SET_ANIM", animation: pick });
+      setTimeout(() => {
+        dispatch({ type: "SET_ANIM", animation: "sleep" });
+        scheduleRandomWake();
+      }, 2000);
+    }, 10000 + Math.random() * 5000); // 10-15s
+  }, []);
+
+  // Idle → sit → sleep → random wake
+  const startIdleChain = useCallback(() => {
+    const t = timersRef.current;
+    clearAllIdleTimers();
+    dispatch({ type: "SET_ANIM", animation: "idle" });
+    t.sit = setTimeout(() => {
+      dispatch({ type: "SET_ANIM", animation: "sit" });
+      t.sleep = setTimeout(() => {
+        dispatch({ type: "SET_ANIM", animation: "sleep" });
+        scheduleRandomWake();
+      }, 2000);
+    }, 2000);
+  }, [clearAllIdleTimers, scheduleRandomWake]);
+
+  // Play a zone's signature sequence, then start idle chain
+  const playZoneSequence = useCallback((zone: Exclude<Zone, null>) => {
+    const sequence = ZONE_SEQUENCE[zone] || [];
+    const t = timersRef.current;
+
+    // Footer: skip signature, go direct to sleep
+    if (sequence.length === 0) {
+      dispatch({ type: "SET_ANIM", animation: "sleep" });
+      scheduleRandomWake();
+      return;
+    }
+
+    // Play sequence step by step
+    const playStep = (stepIdx: number) => {
+      if (stepIdx >= sequence.length) {
+        startIdleChain();
+        return;
+      }
+      const step = sequence[stepIdx];
+      dispatch({ type: "SET_ANIM", animation: step.animation });
+      if (t.zoneHold) clearTimeout(t.zoneHold);
+      t.zoneHold = setTimeout(() => playStep(stepIdx + 1), step.duration);
+    };
+    playStep(0);
+  }, [startIdleChain, scheduleRandomWake]);
 
   // Initialize position
   useEffect(() => {
     setMounted(true);
     const startX = window.innerWidth - 120;
     const startY = window.innerHeight - 120;
-    dispatch({ type: "MOUSE_MOVE", x: startX, y: startY });
-    // Immediately go idle (the MOUSE_MOVE sets walk, so correct it)
+    dispatch({ type: "SET_POS", x: startX, y: startY });
     dispatch({ type: "IDLE_TIMEOUT" });
   }, []);
 
@@ -165,46 +264,35 @@ export function useAvatarState({
   useEffect(() => {
     if (!mounted || !enabled) return;
 
-    function clearTimers() {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      if (sitTimerRef.current) clearTimeout(sitTimerRef.current);
-      if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
-    }
-
     function onMouseMove(e: MouseEvent) {
       dispatch({ type: "MOUSE_MOVE", x: e.clientX - 32, y: e.clientY - 32 });
 
-      clearTimers();
+      // Cancel any pending chat (mouse move cancels click→wave→chat)
+      if (timersRef.current.chat) {
+        clearTimeout(timersRef.current.chat);
+        timersRef.current.chat = null;
+      }
 
-      // 2s → idle
-      idleTimerRef.current = setTimeout(() => {
-        dispatch({ type: "IDLE_TIMEOUT" });
+      clearAllIdleTimers();
+      const t = timersRef.current;
 
-        // If in a zone, apply zone animation
+      // 2s no motion → replay zone sequence or go idle
+      t.idle = setTimeout(() => {
         const z = stateRef.current.activeZone;
         if (z) {
-          dispatch({ type: "ZONE_ENTER", zone: z });
-          return;
+          playZoneSequence(z);
+        } else {
+          startIdleChain();
         }
-
-        // 6s more → sit (8s total)
-        sitTimerRef.current = setTimeout(() => {
-          dispatch({ type: "SIT_TIMEOUT" });
-
-          // 7s more → sleep (15s total)
-          sleepTimerRef.current = setTimeout(() => {
-            dispatch({ type: "SLEEP_TIMEOUT" });
-          }, 7000);
-        }, 6000);
       }, 2000);
     }
 
     window.addEventListener("mousemove", onMouseMove, { passive: true });
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
-      clearTimers();
+      clearAllIdleTimers();
     };
-  }, [mounted, enabled]);
+  }, [mounted, enabled, clearAllIdleTimers, playZoneSequence, startIdleChain]);
 
   // Animation loop for movement
   useEffect(() => {
@@ -228,11 +316,35 @@ export function useAvatarState({
   useEffect(() => {
     if (!mounted) return;
 
-    const zones: { id: string; zone: "beliefs" | "footer" }[] = [
+    const zones: { id: string; zone: Exclude<Zone, null> }[] = [
+      { id: "hero", zone: "hero" },
+      { id: "works", zone: "works" },
       { id: "beliefs", zone: "beliefs" },
+      { id: "mind", zone: "mind" },
+      { id: "recent", zone: "recent" },
+      { id: "timeline", zone: "timeline" },
+      { id: "map", zone: "map" },
+      { id: "guestbook", zone: "guestbook" },
     ];
 
     const observers: IntersectionObserver[] = [];
+
+    function enterZone(zone: Exclude<Zone, null>) {
+      const prev = stateRef.current.activeZone;
+      if (prev === zone) return;
+      clearAllIdleTimers();
+      dispatch({ type: "ZONE_ENTER", zone });
+      // Jump transition only when switching from one zone to another
+      if (prev !== null) {
+        dispatch({ type: "SET_ANIM", animation: "jump" });
+        if (timersRef.current.jump) clearTimeout(timersRef.current.jump);
+        timersRef.current.jump = setTimeout(() => {
+          playZoneSequence(zone);
+        }, 900);
+      } else {
+        playZoneSequence(zone);
+      }
+    }
 
     // Observe named sections
     for (const { id, zone } of zones) {
@@ -241,7 +353,7 @@ export function useAvatarState({
       const obs = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
-            dispatch({ type: "ZONE_ENTER", zone });
+            enterZone(zone);
           } else if (stateRef.current.activeZone === zone) {
             dispatch({ type: "ZONE_EXIT" });
           }
@@ -258,7 +370,7 @@ export function useAvatarState({
       const obs = new IntersectionObserver(
         ([entry]) => {
           if (entry.isIntersecting) {
-            dispatch({ type: "ZONE_ENTER", zone: "footer" });
+            enterZone("footer");
           } else if (stateRef.current.activeZone === "footer") {
             dispatch({ type: "ZONE_EXIT" });
           }
@@ -269,18 +381,22 @@ export function useAvatarState({
       observers.push(obs);
     }
 
-    return () => observers.forEach((obs) => obs.disconnect());
-  }, [mounted]);
+    return () => {
+      observers.forEach((obs) => obs.disconnect());
+      if (timersRef.current.jump) {
+        clearTimeout(timersRef.current.jump);
+        timersRef.current.jump = null;
+      }
+    };
+  }, [mounted, clearAllIdleTimers, playZoneSequence]);
 
-  // Click handler
+  // Click handler — interrupts everything and opens chat immediately
   const onAvatarClick = useCallback(() => {
-    dispatch({ type: "CLICK" });
-    // Wave for 1.5s, then open chat
-    setTimeout(() => {
-      dispatch({ type: "WAVE_DONE" });
-      onChatOpen();
-    }, 1500);
-  }, [onChatOpen]);
+    clearAllIdleTimers();
+    if (timersRef.current.chat) clearTimeout(timersRef.current.chat);
+    if (timersRef.current.jump) { clearTimeout(timersRef.current.jump); timersRef.current.jump = null; }
+    onChatOpen();
+  }, [onChatOpen, clearAllIdleTimers]);
 
   return {
     animation: state.animation,
