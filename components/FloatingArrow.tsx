@@ -53,7 +53,7 @@ export default function FloatingArrow() {
     <a
       href={`#${nextSection}`}
       aria-label="继续向下"
-      className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 transition-all duration-500"
+      className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[60] transition-all duration-500"
       style={{
         opacity: visible ? 0.4 : 0,
         pointerEvents: visible ? "auto" : "none",
