@@ -119,8 +119,8 @@ export default function Hero() {
   // After the big text has been on screen long enough, play the "drop"
   // sequence: flashlight falls, returns to origin, halo extinguishes.
   async function endReveal() {
-    // Let the big text sit on dark background ~3.5s
-    await new Promise((r) => setTimeout(r, 3500));
+    // Let the big text sit on dark background ~1.5s
+    await new Promise((r) => setTimeout(r, 1500));
 
     // Fade out big text + restore small text
     setFadeOut(true);
