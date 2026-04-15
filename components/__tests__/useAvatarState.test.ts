@@ -107,31 +107,33 @@ describe("avatarReducer", () => {
     expect(state.posX).toBe(100);
   });
 
-  it("ZONE_ENTER overrides to zone animation when idle", () => {
+  it("ZONE_ENTER sets active zone without touching animation", () => {
+    // After 3D avatar refactor, the hook drives zone animations via SET_ANIM;
+    // the reducer only tracks which zone is active.
     let state = initialState();
     state.animation = "idle";
     state = avatarReducer(state, { type: "ZONE_ENTER", zone: "beliefs" });
-    expect(state.animation).toBe("sit");
     expect(state.activeZone).toBe("beliefs");
+    expect(state.animation).toBe("idle");
   });
 
-  it("ZONE_ENTER to footer triggers sleep", () => {
+  it("ZONE_ENTER to footer just tracks zone", () => {
     let state = initialState();
     state.animation = "idle";
     state = avatarReducer(state, { type: "ZONE_ENTER", zone: "footer" });
-    expect(state.animation).toBe("sleep");
+    expect(state.activeZone).toBe("footer");
+    expect(state.animation).toBe("idle");
   });
 
-  it("ZONE_EXIT clears zone and returns to idle", () => {
+  it("ZONE_EXIT clears zone without forcing animation", () => {
     let state = initialState();
     state.animation = "sit";
     state.activeZone = "beliefs";
     state = avatarReducer(state, { type: "ZONE_EXIT" });
-    expect(state.animation).toBe("idle");
     expect(state.activeZone).toBeNull();
   });
 
-  it("mouse move overrides zone animation", () => {
+  it("mouse move clears zone and starts walk", () => {
     let state = initialState();
     state.animation = "sit";
     state.activeZone = "beliefs";
