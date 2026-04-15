@@ -216,11 +216,24 @@ interface Avatar3DProps {
 export default function Avatar3D({ onChatOpen, chatOpen }: Avatar3DProps) {
   const [hasWebGL, setHasWebGL] = useState(true);
   const [showBubble, setShowBubble] = useState(true);
+  const [externallyPaused, setExternallyPaused] = useState(false);
+
+  // Other components can pause the avatar (e.g. Hero flashlight interaction)
+  useEffect(() => {
+    const onPause = () => setExternallyPaused(true);
+    const onResume = () => setExternallyPaused(false);
+    window.addEventListener("avatar:pause", onPause);
+    window.addEventListener("avatar:resume", onResume);
+    return () => {
+      window.removeEventListener("avatar:pause", onPause);
+      window.removeEventListener("avatar:resume", onResume);
+    };
+  }, []);
 
   const { animation, posX, posY, facingLeft, onAvatarClick } = useAvatarState({
     onChatOpen,
     chatOpen,
-    enabled: !chatOpen,
+    enabled: !chatOpen && !externallyPaused,
   });
 
   useEffect(() => {

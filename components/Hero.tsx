@@ -13,7 +13,7 @@ import {
 const content = staticContent as StaticContent;
 
 const RADIUS = 70;
-const THRESHOLD = 0.5;
+const THRESHOLD = 0.45;
 const MAX_POINTS = 500;
 
 export default function Hero() {
@@ -40,33 +40,46 @@ export default function Hero() {
     null
   );
   const [visitedPoints, setVisitedPoints] = useState<Circle[]>([]);
+  const [coverage, setCoverage] = useState(0); // 0..1, drives progressive reveal
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
   const [hideFlash, setHideFlash] = useState(false);
+  const [active, setActive] = useState(false); // user is interacting with flashlight
 
-  // Track visited points as user moves flashlight
+  // Track visited points + recompute coverage on each move
   useEffect(() => {
-    if (revealed || !flashPos) return;
-    setVisitedPoints((prev) => {
-      const next = [...prev, { x: flashPos.x, y: flashPos.y, r: RADIUS }];
-      return next.length > MAX_POINTS ? next.slice(-MAX_POINTS) : next;
-    });
-  }, [flashPos, revealed]);
+    if (revealed || !flashPos || !sectionRef.current) return;
 
-  // Check coverage and trigger reveal
-  useEffect(() => {
-    if (revealed || !sectionRef.current) return;
+    const next = [
+      ...visitedPoints,
+      { x: flashPos.x, y: flashPos.y, r: RADIUS },
+    ];
+    const trimmed = next.length > MAX_POINTS ? next.slice(-MAX_POINTS) : next;
+    setVisitedPoints(trimmed);
+
     const rect = sectionRef.current.getBoundingClientRect();
-    const cov = calculateCoverage(visitedPoints, rect.width, rect.height);
+    const cov = calculateCoverage(trimmed, rect.width, rect.height);
+    setCoverage(cov);
+
     if (isRevealed(cov, THRESHOLD)) {
       setRevealed(true);
       setTimeout(() => setFadeOut(true), 3000);
       setTimeout(() => {
         setFadeOut(false);
         setHideFlash(true);
+        setActive(false);
+        window.dispatchEvent(new Event("avatar:resume"));
       }, 4500);
     }
-  }, [visitedPoints, revealed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flashPos, revealed]);
+
+  // Pause avatar when user starts interacting with flashlight
+  useEffect(() => {
+    if (active) {
+      window.dispatchEvent(new Event("avatar:pause"));
+    }
+  }, [active]);
 
   function onPointerMove(e: React.PointerEvent) {
     if (revealed || hideFlash || !typingComplete) return;
@@ -75,14 +88,38 @@ export default function Hero() {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     });
+    if (!active) setActive(true);
   }
 
-  // Mask: when flashlight is active, cut a transparent hole into original lines
+  function dismissFlashlight(e: React.MouseEvent) {
+    e.preventDefault();
+    if (hideFlash) return;
+    setHideFlash(true);
+    setActive(false);
+    setFlashPos(null);
+    setVisitedPoints([]);
+    setCoverage(0);
+    window.dispatchEvent(new Event("avatar:resume"));
+  }
+
+  // Progressive opacity (only during scanning; revealed phase overrides)
+  const bigOpacity = revealed
+    ? fadeOut
+      ? 0
+      : 1
+    : Math.min(1, coverage * 1.6); // amplify so reveal feels responsive
+  const linesOpacity = revealed
+    ? fadeOut
+      ? 1
+      : 0
+    : Math.max(0.15, 1 - coverage * 1.2);
+
+  // Mask cuts holes in the original lines where flashlight is
   const maskStyle =
     flashPos && !revealed
       ? {
-          WebkitMaskImage: `radial-gradient(circle ${RADIUS}px at ${flashPos.x}px ${flashPos.y}px, transparent 60%, black 100%)`,
-          maskImage: `radial-gradient(circle ${RADIUS}px at ${flashPos.x}px ${flashPos.y}px, transparent 60%, black 100%)`,
+          WebkitMaskImage: `radial-gradient(circle ${RADIUS}px at ${flashPos.x}px ${flashPos.y}px, transparent 55%, black 100%)`,
+          maskImage: `radial-gradient(circle ${RADIUS}px at ${flashPos.x}px ${flashPos.y}px, transparent 55%, black 100%)`,
         }
       : {};
 
@@ -91,14 +128,15 @@ export default function Hero() {
       ref={sectionRef}
       id="hero"
       onPointerMove={onPointerMove}
+      onContextMenu={dismissFlashlight}
       className="relative min-h-screen flex flex-col justify-center items-center px-6 text-center overflow-hidden"
     >
-      {/* Hidden revealed-text layer (shown when flashlight covers enough) */}
+      {/* Big revealed text — opacity follows coverage */}
       <div
-        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none transition-opacity"
+        className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
         style={{
-          opacity: revealed && !fadeOut ? 1 : 0,
-          transitionDuration: revealed && !fadeOut ? "600ms" : "1500ms",
+          opacity: bigOpacity,
+          transition: revealed ? "opacity 0.6s" : "opacity 0.15s linear",
         }}
       >
         <p className="font-serif text-6xl md:text-8xl text-ink leading-tight">
@@ -109,12 +147,13 @@ export default function Hero() {
         </p>
       </div>
 
-      {/* Original 3 hook lines (masked by flashlight while flashlight present) */}
+      {/* Original 3 hook lines — masked while flashlight present, fade by coverage */}
       <div
-        className="relative z-[1] space-y-3 transition-opacity duration-1000"
+        className="relative z-[1] space-y-3"
         style={{
           ...maskStyle,
-          opacity: revealed && !fadeOut ? 0 : 1,
+          opacity: linesOpacity,
+          transition: revealed ? "opacity 1.2s" : "opacity 0.2s linear",
         }}
       >
         {content.hook.lines.map((line, i) => (
@@ -132,24 +171,30 @@ export default function Hero() {
 
       <div
         className={`relative z-[1] mt-24 text-sm font-sans text-muted tracking-widest transition-opacity duration-1000 ${
-          typingComplete && !revealed ? "opacity-100" : "opacity-0"
+          typingComplete && !active && !revealed ? "opacity-100" : "opacity-0"
         }`}
       >
         马泽闰 Mark · 2026
       </div>
 
-      {/* Draggable flashlight emoji */}
+      {/* Draggable flashlight + hint */}
       {!hideFlash && typingComplete && (
         <motion.div
           drag
           dragMomentum={false}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: fadeOut ? 0 : 1 }}
-          transition={{ duration: fadeOut ? 1.5 : 0.8 }}
-          className="absolute top-8 right-8 text-3xl cursor-grab active:cursor-grabbing select-none z-[2]"
-          aria-label="手电筒——拖动我扫过文字"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{
+            opacity: fadeOut ? 0 : 1,
+            scale: 1,
+          }}
+          transition={{ duration: fadeOut ? 1.5 : 0.6 }}
+          className="absolute top-8 right-8 cursor-grab active:cursor-grabbing select-none z-[3] flex flex-col items-center gap-2"
+          aria-label="手电筒——拖动我扫过文字，右键收起"
         >
-          🔦
+          <span className="text-3xl">🔦</span>
+          <span className="font-sans text-[10px] text-muted tracking-widest whitespace-nowrap pointer-events-none">
+            拖动 · 右键收起
+          </span>
         </motion.div>
       )}
     </section>
