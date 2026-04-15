@@ -8,7 +8,7 @@ export default function Timeline() {
     <section id="timeline" className="py-32 px-6">
       <div className="max-w-prose mx-auto">
         <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-4 text-center">
-          塑造今天的我的四个节点
+          塑造今天的我的四个节点 / TIMELINE
         </h2>
         <p className="font-serif text-sm text-muted mb-20 text-center">
           不是完整的履历

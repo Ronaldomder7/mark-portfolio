@@ -8,7 +8,7 @@ export default function Thoughts() {
     <section id="mind" className="py-32 px-6">
       <div className="max-w-prose mx-auto">
         <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-16 text-center">
-          我怎么想事情
+          我怎么想事情 / MIND
         </h2>
         <div className="space-y-20">
           {content.thoughtPieces.map((t, i) => (

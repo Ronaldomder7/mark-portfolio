@@ -8,7 +8,7 @@ export default function Beliefs() {
     <section className="py-32 px-6">
       <div className="max-w-prose mx-auto">
         <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-16 text-center">
-          我相信什么
+          我相信什么 / BELIEFS
         </h2>
         <div className="space-y-20">
           {content.beliefs.map((b, i) => (

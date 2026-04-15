@@ -159,7 +159,7 @@ export default function ChinaMap() {
       <section id="map" className="py-32 px-6">
         <div className="max-w-5xl mx-auto">
           <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-4 text-center">
-            我走过的地方
+            我走过的地方 / FOOTPRINTS
           </h2>
           <p className="font-serif text-sm text-muted text-center mb-16">
             20 个城市，11 个省份

@@ -8,7 +8,7 @@ export default function RecentThinking() {
     <section id="recent" className="py-32 px-6">
       <div className="max-w-prose mx-auto">
         <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-4 text-center">
-          最近在想
+          最近在想 / RECENT
         </h2>
         <p className="font-serif text-sm text-muted mb-16 text-center">
           这个版本更新于 {content.updatedAt}

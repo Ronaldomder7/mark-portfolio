@@ -35,7 +35,7 @@ export default function Guestbook() {
     <section id="guestbook" className="py-32 px-6">
       <div className="max-w-prose mx-auto">
         <h2 className="font-sans text-xs text-muted tracking-widest uppercase mb-4 text-center">
-          留一句话
+          留一句话 / GUESTBOOK
         </h2>
         <p className="font-serif text-sm text-muted mb-16 text-center">
           看完网站的你，想对我说什么
