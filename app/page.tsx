@@ -1,7 +1,7 @@
 import MouseGlow from "@/components/MouseGlow";
 import Nav from "@/components/Nav";
 import Hero from "@/components/Hero";
-import Works from "@/components/Works";
+import Experience from "@/components/Experience";
 import Beliefs from "@/components/Beliefs";
 import Thoughts from "@/components/Thoughts";
 import SystemCard from "@/components/SystemCard";
@@ -10,6 +10,7 @@ import ChinaMap from "@/components/ChinaMap";
 import RecentThinking from "@/components/RecentThinking";
 import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
+import FooterApply from "@/components/FooterApply";
 import FloatingArrow from "@/components/FloatingArrow";
 import AvatarChat from "@/components/AvatarChat";
 
@@ -21,7 +22,7 @@ export default function Home() {
       <AvatarChat />
       <Nav />
       <Hero />
-      <Works />
+      <Experience />
       <div id="beliefs">
         <Beliefs />
       </div>
@@ -31,6 +32,7 @@ export default function Home() {
       <ChinaMap />
       <RecentThinking />
       <Guestbook />
+      <FooterApply />
       <Footer />
     </main>
   );
