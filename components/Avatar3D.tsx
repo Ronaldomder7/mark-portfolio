@@ -253,9 +253,25 @@ export default function Avatar3D({ onChatOpen, chatOpen }: Avatar3DProps) {
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
+      {/* Invisible click hit area that follows the avatar — this is how the
+          avatar stays clickable while everything else on the page remains
+          interactive (FloatingArrow, links, buttons, etc.) */}
+      <div
+        onClick={onAvatarClick}
+        style={{
+          position: "absolute",
+          left: posX,
+          top: posY,
+          width: 140,
+          height: 200,
+          transform: "translate(-50%, -40%)",
+          pointerEvents: "auto",
+          cursor: "pointer",
+        }}
+      />
       <Suspense fallback={null}>
         <Canvas
-          style={{ background: "transparent", pointerEvents: "auto" }}
+          style={{ background: "transparent", pointerEvents: "none" }}
           gl={{ alpha: true, antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
           orthographic
           camera={{ zoom, position: [0, 0, 10], near: 0.1, far: 100 }}
