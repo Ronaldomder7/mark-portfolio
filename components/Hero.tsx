@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, useMotionValue, animate } from "framer-motion";
 import staticContent from "@/content/static.json";
 import type { StaticContent } from "@/lib/types";
 import {
@@ -16,6 +15,16 @@ const RADIUS = 60;
 const THRESHOLD = 0.4;
 const MAX_POINTS = 800;
 const NIGHT_COLOR = "#0a0a0a";
+
+type FlashTransform = {
+  x: number;
+  y: number;
+  rotate: number;
+  opacity: number;
+  scale: number;
+};
+
+const ORIGIN: FlashTransform = { x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 };
 
 export default function Hero() {
   // --- Typing ---
@@ -36,6 +45,7 @@ export default function Hero() {
 
   // --- Flashlight ---
   const sectionRef = useRef<HTMLElement>(null);
+  const flashRef = useRef<HTMLDivElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const visitedPointsRef = useRef<Circle[]>([]);
   const lastMaskUpdateRef = useRef(0);
@@ -48,19 +58,20 @@ export default function Hero() {
   const [fadeOut, setFadeOut] = useState(false);
   const [completed, setCompleted] = useState(false);
 
-  // Motion values for the flashlight's offset from its CSS-centered origin
-  const flashX = useMotionValue(0);
-  const flashY = useMotionValue(0);
-  const flashRotate = useMotionValue(0);
-  const flashOpacity = useMotionValue(1);
-  const flashScale = useMotionValue(1);
+  // React state for transform (used for the reset/drop animation via CSS
+  // transition). During drag we bypass state and set the flashRef style
+  // directly for lag-free tracking.
+  const [transform, setTransform] = useState<FlashTransform>(ORIGIN);
+  const [transitionDuration, setTransitionDuration] = useState(0);
 
-  // Drag bookkeeping (our own, not framer's)
-  const dragStartRef = useRef<{
+  const dragRef = useRef<{
+    pointerId: number;
     pointerX: number;
     pointerY: number;
     origX: number;
     origY: number;
+    currentX: number;
+    currentY: number;
   } | null>(null);
 
   const rebuildMask = useCallback(() => {
@@ -87,6 +98,13 @@ export default function Hero() {
     }
     setMaskUrl(canvas.toDataURL());
   }, []);
+
+  function applyTransformToRef(t: FlashTransform) {
+    const el = flashRef.current;
+    if (!el) return;
+    el.style.transform = `translate(${t.x}px, ${t.y}px) rotate(${t.rotate}deg) scale(${t.scale})`;
+    el.style.opacity = String(t.opacity);
+  }
 
   function recordScanPoint(clientX: number, clientY: number) {
     if (revealed || completed || !sectionRef.current || !typingComplete) return;
@@ -121,51 +139,95 @@ export default function Hero() {
         setRevealed(true);
         setDragging(false);
         setFlashPos(null);
-        dragStartRef.current = null;
+        // Tear down the drag entirely — release pointer capture so
+        // nothing claims ownership of the element for the reset.
+        const d = dragRef.current;
+        if (d && flashRef.current) {
+          try {
+            flashRef.current.releasePointerCapture(d.pointerId);
+          } catch {
+            // ignore
+          }
+        }
+        dragRef.current = null;
         window.dispatchEvent(new Event("avatar:resume"));
         void endReveal();
       }
     }
   }
 
-  function onPointerDown(e: React.PointerEvent) {
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (revealed || completed || !typingComplete) return;
     e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragStartRef.current = {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    // Disable transitions during drag (we update style directly)
+    setTransitionDuration(0);
+    dragRef.current = {
+      pointerId: e.pointerId,
       pointerX: e.clientX,
       pointerY: e.clientY,
-      origX: flashX.get(),
-      origY: flashY.get(),
+      origX: transform.x,
+      origY: transform.y,
+      currentX: transform.x,
+      currentY: transform.y,
     };
     setDragging(true);
-    animate(flashScale, 1.15, { duration: 0.15 });
+    applyTransformToRef({ ...transform, scale: 1.15 });
     window.dispatchEvent(new Event("avatar:pause"));
   }
 
-  function onPointerMove(e: React.PointerEvent) {
-    if (!dragStartRef.current) return;
-    const dx = e.clientX - dragStartRef.current.pointerX;
-    const dy = e.clientY - dragStartRef.current.pointerY;
-    flashX.set(dragStartRef.current.origX + dx);
-    flashY.set(dragStartRef.current.origY + dy);
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = dragRef.current;
+    if (!d) return;
+    const nx = d.origX + (e.clientX - d.pointerX);
+    const ny = d.origY + (e.clientY - d.pointerY);
+    d.currentX = nx;
+    d.currentY = ny;
+    applyTransformToRef({
+      x: nx,
+      y: ny,
+      rotate: 0,
+      opacity: 1,
+      scale: 1.15,
+    });
     recordScanPoint(e.clientX, e.clientY);
   }
 
-  function onPointerUp(e: React.PointerEvent) {
-    if (!dragStartRef.current) return;
-    dragStartRef.current = null;
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const d = dragRef.current;
+    if (!d) return;
     try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      e.currentTarget.releasePointerCapture(d.pointerId);
     } catch {
       // ignore
     }
+    // Commit the dragged position to React state so future transitions
+    // can interpolate from it.
+    const finalT: FlashTransform = {
+      x: d.currentX,
+      y: d.currentY,
+      rotate: 0,
+      opacity: 1,
+      scale: 1,
+    };
+    dragRef.current = null;
+    setTransform(finalT);
+    applyTransformToRef(finalT);
     setDragging(false);
     setFlashPos(null);
-    animate(flashScale, 1, { duration: 0.2 });
     if (!revealed) {
       window.dispatchEvent(new Event("avatar:resume"));
     }
+  }
+
+  // Helper: snap state to a transform and wait for the transition to finish.
+  async function animateTo(target: FlashTransform, durationMs: number) {
+    setTransitionDuration(durationMs);
+    setTransform(target);
+    // style prop re-render happens async; mirror to ref immediately for
+    // fallback if transition is missed.
+    applyTransformToRef(target);
+    await new Promise((r) => setTimeout(r, durationMs + 30));
   }
 
   async function endReveal() {
@@ -173,21 +235,23 @@ export default function Hero() {
     setFadeOut(true);
     await new Promise((r) => setTimeout(r, 900));
 
-    // Drop
-    animate(flashRotate, 28, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
-    animate(flashOpacity, 0.55, { duration: 0.55, ease: [0.4, 0, 0.6, 1] });
-    await animate(flashY, flashY.get() + 140, {
-      duration: 0.55,
-      ease: [0.4, 0, 0.6, 1],
-    });
+    // Read current transform (may have been dragged)
+    const cur = transform;
+    // Drop — pitch down + rotate + dim
+    await animateTo(
+      {
+        x: cur.x,
+        y: cur.y + 140,
+        rotate: 28,
+        opacity: 0.55,
+        scale: 1,
+      },
+      550
+    );
     await new Promise((r) => setTimeout(r, 200));
 
     // Reset to origin
-    animate(flashX, 0, { duration: 0.45, ease: "easeOut" });
-    animate(flashRotate, 0, { duration: 0.45, ease: "easeOut" });
-    animate(flashOpacity, 1, { duration: 0.45, ease: "easeOut" });
-    animate(flashScale, 1, { duration: 0.45, ease: "easeOut" });
-    await animate(flashY, 0, { duration: 0.45, ease: "easeOut" });
+    await animateTo(ORIGIN, 450);
 
     setRevealed(false);
     setFadeOut(false);
@@ -199,25 +263,21 @@ export default function Hero() {
     window.dispatchEvent(new Event("avatar:resume"));
   }
 
-  function resetAll() {
+  async function resetAll() {
     setRevealed(false);
     setFadeOut(false);
     setDragging(false);
     setFlashPos(null);
-    dragStartRef.current = null;
+    dragRef.current = null;
     visitedPointsRef.current = [];
     setMaskUrl("");
-    animate(flashX, 0, { duration: 0.5 });
-    animate(flashY, 0, { duration: 0.5 });
-    animate(flashRotate, 0, { duration: 0.5 });
-    animate(flashOpacity, 1, { duration: 0.3 });
-    animate(flashScale, 1, { duration: 0.3 });
     window.dispatchEvent(new Event("avatar:resume"));
+    await animateTo(ORIGIN, 500);
   }
 
   function onContextMenu(e: React.MouseEvent) {
     e.preventDefault();
-    resetAll();
+    void resetAll();
   }
 
   useEffect(() => {
@@ -312,10 +372,9 @@ export default function Hero() {
 
       {typingComplete && (
         <div className="absolute bottom-40 left-0 right-0 flex justify-center pointer-events-none z-[80]">
-          <motion.div
-            onPointerDown={
-              completed || revealed ? undefined : onPointerDown
-            }
+          <div
+            ref={flashRef}
+            onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
@@ -323,11 +382,12 @@ export default function Hero() {
               completed ? "cursor-default" : "cursor-grab active:cursor-grabbing"
             }`}
             style={{
-              x: flashX,
-              y: flashY,
-              rotate: flashRotate,
-              opacity: flashOpacity,
-              scale: flashScale,
+              transform: `translate(${transform.x}px, ${transform.y}px) rotate(${transform.rotate}deg) scale(${transform.scale})`,
+              opacity: transform.opacity,
+              transition:
+                transitionDuration > 0
+                  ? `transform ${transitionDuration}ms ease-out, opacity ${transitionDuration}ms ease-out`
+                  : "none",
               touchAction: "none",
             }}
             aria-label="手电筒——拖动我扫过文字，右键复位"
@@ -374,7 +434,7 @@ export default function Hero() {
                 拖动我 · 右键复位
               </span>
             )}
-          </motion.div>
+          </div>
         </div>
       )}
     </section>
