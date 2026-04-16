@@ -45,6 +45,7 @@ export default function Hero() {
   // --- Flashlight ---
   const sectionRef = useRef<HTMLElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
+  const bigTextRef = useRef<HTMLDivElement>(null);
   const flashRef = useRef<HTMLDivElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const visitedPointsRef = useRef<Circle[]>([]);
@@ -152,17 +153,16 @@ export default function Hero() {
       lastMaskUpdateRef.current = now;
       rebuildMask();
 
-      // Use actual text element bounding box for coverage
-      const textEl = textRef.current;
-      if (textEl) {
-        const textRect = textEl.getBoundingClientRect();
-        // Convert text rect to section-relative coords
-        const tLeft = textRect.left - rect.left;
-        const tTop = textRect.top - rect.top;
-        const tW = textRect.width;
-        const tH = textRect.height;
-        // Filter points within the text bounding box
-        const textPoints = visitedPointsRef.current
+      // Use the BIG revealed text bounding box for coverage — that's
+      // what the user is actually scanning across during night mode.
+      const targetEl = bigTextRef.current;
+      if (targetEl) {
+        const tr = targetEl.getBoundingClientRect();
+        const tLeft = tr.left - rect.left;
+        const tTop = tr.top - rect.top;
+        const tW = tr.width;
+        const tH = tr.height;
+        const nearby = visitedPointsRef.current
           .filter(
             (p) =>
               p.x >= tLeft - RADIUS &&
@@ -171,7 +171,7 @@ export default function Hero() {
               p.y <= tTop + tH + RADIUS
           )
           .map((p) => ({ x: p.x - tLeft, y: p.y - tTop, r: p.r }));
-        const cov = calculateCoverage(textPoints, tW, tH);
+        const cov = calculateCoverage(nearby, tW, tH);
         setScanProgress(Math.min(1, cov / FULL_REVEAL_THRESHOLD));
       }
     }
@@ -409,18 +409,20 @@ export default function Hero() {
           transition: fadeOut ? "opacity 1s" : "opacity 0.3s",
         }}
       >
-        <p
-          className="font-serif text-5xl md:text-7xl leading-tight"
-          style={{ color: "#fafaf8" }}
-        >
-          你想要
-        </p>
-        <p
-          className="font-serif text-5xl md:text-7xl leading-tight mt-3"
-          style={{ color: "#fafaf8" }}
-        >
-          怎样活这一生?
-        </p>
+        <div ref={bigTextRef} className="flex flex-col items-center">
+          <p
+            className="font-serif text-5xl md:text-7xl leading-tight"
+            style={{ color: "#fafaf8" }}
+          >
+            你想要
+          </p>
+          <p
+            className="font-serif text-5xl md:text-7xl leading-tight mt-3"
+            style={{ color: "#fafaf8" }}
+          >
+            怎样活这一生?
+          </p>
+        </div>
       </div>
 
       <div
