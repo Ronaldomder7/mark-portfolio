@@ -12,7 +12,7 @@ import {
 const content = staticContent as StaticContent;
 
 const RADIUS = 60;
-const THRESHOLD = 0.4;
+const THRESHOLD = 0.25;
 const MAX_POINTS = 800;
 const NIGHT_COLOR = "#0a0a0a";
 
@@ -57,6 +57,7 @@ export default function Hero() {
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0); // 0..1
 
   // Track the current transform purely in a ref — no React state, no
   // framer-motion, no re-render churn. The DOM element is always the
@@ -151,11 +152,31 @@ export default function Hero() {
       lastMaskUpdateRef.current = now;
       rebuildMask();
 
-      const cov = calculateCoverage(
-        visitedPointsRef.current,
-        rect.width,
-        rect.height
-      );
+      // Calculate coverage over the TEXT area only (not the whole Hero).
+      // The 3 text lines sit roughly in the middle 60% of the width and
+      // 30% of the height — use that bounding box so the user doesn't
+      // have to scan the entire empty Hero to hit the threshold.
+      const textW = rect.width * 0.6;
+      const textH = rect.height * 0.3;
+      const textOffX = rect.width * 0.2; // 20% from left
+      const textOffY = rect.height * 0.25; // 25% from top
+      // Shift scan points into text-relative coordinates
+      const textPoints = visitedPointsRef.current
+        .filter(
+          (p) =>
+            p.x >= textOffX &&
+            p.x <= textOffX + textW &&
+            p.y >= textOffY &&
+            p.y <= textOffY + textH
+        )
+        .map((p) => ({
+          x: p.x - textOffX,
+          y: p.y - textOffY,
+          r: p.r,
+        }));
+      const cov = calculateCoverage(textPoints, textW, textH);
+      setScanProgress(Math.min(1, cov / THRESHOLD));
+      console.log("[flash] coverage:", (cov * 100).toFixed(1) + "% threshold:", (THRESHOLD * 100) + "%");
       if (isRevealed(cov, THRESHOLD)) {
         setRevealed(true);
         setDragging(false);
@@ -225,35 +246,61 @@ export default function Hero() {
   }
 
   async function endReveal() {
-    await new Promise((r) => setTimeout(r, 1500));
-    setFadeOut(true);
-    await new Promise((r) => setTimeout(r, 900));
+    console.log("[flash] endReveal START");
+    try {
+      await new Promise((r) => setTimeout(r, 1500));
+      console.log("[flash] 1.5s wait done, setting fadeOut");
+      setFadeOut(true);
+      await new Promise((r) => setTimeout(r, 900));
+      console.log("[flash] fadeOut done, starting drop");
 
-    const cur = currentTransformRef.current;
-    // Drop — pitch down + rotate + dim
-    await animateTo(
-      {
-        x: cur.x,
-        y: cur.y + 140,
-        rotate: 28,
-        opacity: 0.55,
-        scale: 1,
-      },
-      550
-    );
-    await new Promise((r) => setTimeout(r, 200));
+      const cur = currentTransformRef.current;
+      console.log("[flash] current transform:", JSON.stringify(cur));
 
-    // Reset to origin
-    await animateTo(ORIGIN, 450);
+      const el = flashRef.current;
+      console.log("[flash] flashRef.current exists:", !!el);
+      if (el) {
+        console.log("[flash] element style BEFORE drop:", el.getAttribute("style"));
+      }
 
-    setRevealed(false);
-    setFadeOut(false);
-    setDragging(false);
-    setFlashPos(null);
-    visitedPointsRef.current = [];
-    setMaskUrl("");
-    setCompleted(true);
-    window.dispatchEvent(new Event("avatar:resume"));
+      // Drop — pitch down + rotate + dim
+      await animateTo(
+        {
+          x: cur.x,
+          y: cur.y + 140,
+          rotate: 28,
+          opacity: 0.55,
+          scale: 1,
+        },
+        550
+      );
+      console.log("[flash] drop done");
+      if (el) {
+        console.log("[flash] element style AFTER drop:", el.getAttribute("style"));
+      }
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Reset to origin
+      console.log("[flash] starting reset to origin");
+      await animateTo(ORIGIN, 450);
+      console.log("[flash] reset done");
+      if (el) {
+        console.log("[flash] element style AFTER reset:", el.getAttribute("style"));
+      }
+
+      setRevealed(false);
+      setFadeOut(false);
+      setDragging(false);
+      setFlashPos(null);
+      visitedPointsRef.current = [];
+      setMaskUrl("");
+      setCompleted(true);
+      console.log("[flash] endReveal COMPLETE, completed=true");
+      window.dispatchEvent(new Event("avatar:resume"));
+    } catch (err) {
+      console.error("[flash] endReveal ERROR:", err);
+    }
   }
 
   async function resetAll() {
@@ -325,6 +372,24 @@ export default function Hero() {
             background: `radial-gradient(circle ${RADIUS * 1.3}px at ${flashPos.x}px ${flashPos.y}px, rgba(255,230,180,0.22) 0%, rgba(255,230,180,0.08) 45%, transparent 75%)`,
           }}
         />
+      )}
+
+      {/* Scan progress bar — only during active drag, fades when done */}
+      {dragging && scanProgress > 0 && scanProgress < 1 && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[5] pointer-events-none">
+          <div
+            className="w-40 h-1 rounded-full overflow-hidden"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-200"
+              style={{
+                width: `${scanProgress * 100}%`,
+                background: "rgba(255,230,180,0.7)",
+              }}
+            />
+          </div>
+        </div>
       )}
 
       <div
