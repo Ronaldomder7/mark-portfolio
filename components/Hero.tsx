@@ -348,9 +348,9 @@ export default function Hero() {
       )}
 
 
-      {/* Progress bar during drag */}
+      {/* Progress bar — positioned between text and flashlight */}
       {dragging && scanProgress > 0 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[5] pointer-events-none flex flex-col items-center gap-1">
+        <div className="absolute top-[62%] left-1/2 -translate-x-1/2 z-[5] pointer-events-none flex flex-col items-center gap-1">
           <div
             className="w-40 h-1 rounded-full overflow-hidden"
             style={{ background: "rgba(255,255,255,0.15)" }}
