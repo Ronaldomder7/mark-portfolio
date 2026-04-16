@@ -44,6 +44,7 @@ export default function Hero() {
 
   // --- Flashlight ---
   const sectionRef = useRef<HTMLElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
   const flashRef = useRef<HTMLDivElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const visitedPointsRef = useRef<Circle[]>([]);
@@ -151,22 +152,28 @@ export default function Hero() {
       lastMaskUpdateRef.current = now;
       rebuildMask();
 
-      // Update progress based on text area coverage
-      const textW = rect.width * 0.6;
-      const textH = rect.height * 0.3;
-      const textOffX = rect.width * 0.2;
-      const textOffY = rect.height * 0.25;
-      const textPoints = visitedPointsRef.current
-        .filter(
-          (p) =>
-            p.x >= textOffX &&
-            p.x <= textOffX + textW &&
-            p.y >= textOffY &&
-            p.y <= textOffY + textH
-        )
-        .map((p) => ({ x: p.x - textOffX, y: p.y - textOffY, r: p.r }));
-      const cov = calculateCoverage(textPoints, textW, textH);
-      setScanProgress(Math.min(1, cov / FULL_REVEAL_THRESHOLD));
+      // Use actual text element bounding box for coverage
+      const textEl = textRef.current;
+      if (textEl) {
+        const textRect = textEl.getBoundingClientRect();
+        // Convert text rect to section-relative coords
+        const tLeft = textRect.left - rect.left;
+        const tTop = textRect.top - rect.top;
+        const tW = textRect.width;
+        const tH = textRect.height;
+        // Filter points within the text bounding box
+        const textPoints = visitedPointsRef.current
+          .filter(
+            (p) =>
+              p.x >= tLeft - RADIUS &&
+              p.x <= tLeft + tW + RADIUS &&
+              p.y >= tTop - RADIUS &&
+              p.y <= tTop + tH + RADIUS
+          )
+          .map((p) => ({ x: p.x - tLeft, y: p.y - tTop, r: p.r }));
+        const cov = calculateCoverage(textPoints, tW, tH);
+        setScanProgress(Math.min(1, cov / FULL_REVEAL_THRESHOLD));
+      }
     }
   }
 
@@ -311,6 +318,7 @@ export default function Hero() {
       <canvas ref={maskCanvasRef} className="hidden" aria-hidden="true" />
 
       <div
+        ref={textRef}
         className="relative z-[1] space-y-3 transition-opacity"
         style={{
           opacity: nightActive ? 0 : 1,
