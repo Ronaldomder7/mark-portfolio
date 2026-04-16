@@ -26,9 +26,8 @@ interface City {
   photoCount: number;
 }
 
-// Countries GeoJSON URL — used to draw the hexagonal dot grid over land
-const COUNTRIES_URL =
-  "https://unpkg.com/three-globe/example/datasets/ne_110m_admin_0_countries.geojson";
+// Countries GeoJSON — served from /public, avoids CDN blocking in China
+const COUNTRIES_URL = "/globe/countries.geojson";
 
 // Center of China (roughly)
 const CHINA_LAT = 35;
