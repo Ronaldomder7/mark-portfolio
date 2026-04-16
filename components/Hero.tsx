@@ -374,12 +374,10 @@ export default function Hero() {
             className={`pointer-events-auto select-none flex flex-col items-center gap-2 ${
               completed ? "cursor-default" : "cursor-grab active:cursor-grabbing"
             }`}
-            style={{
-              transform: "translate(0px, 0px) rotate(0deg) scale(1)",
-              opacity: 1,
-              transition: "none",
-              touchAction: "none",
-            }}
+            // Transform/opacity/transition are NOT in React style — they
+            // are driven imperatively via writeTransform/animateTo to avoid
+            // React re-renders wiping them during the reveal sequence.
+            style={{ touchAction: "none" }}
             aria-label="手电筒——拖动我扫过文字，右键复位"
           >
             {!dragging && !revealed && !completed && (
