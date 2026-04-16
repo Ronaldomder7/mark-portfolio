@@ -79,6 +79,7 @@ export default function ChinaMap() {
   const [selected, setSelected] = useState<City | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [hoveredCity, setHoveredCity] = useState<string | null>(null);
+  const [lockedCity, setLockedCity] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [gestureMode, setGestureMode] = useState<"none" | "camera" | "mouse">("none");
   const [burstId, setBurstId] = useState(0);
@@ -157,14 +158,22 @@ export default function ChinaMap() {
       setHoveredCity(nearest.name);
     }
 
-    // Fist: open gallery for hovered city. Release: close.
-    if (hand.isFist && !selected && nearest) {
-      selectCity(nearest);
-    } else if (!hand.isFist && selected) {
+    // Three-step gesture flow:
+    //   1. Hand hovers over a city → hoveredCity tracks it
+    //   2. OK gesture (thumb+index pinch) while hovering → LOCK that city
+    //   3. Fist while something is locked → open gallery for LOCKED city
+    //   4. Open hand → close gallery + unlock
+    if (hand.isOk && nearest && !lockedCity) {
+      setLockedCity(nearest.name);
+    } else if (hand.isFist && lockedCity && !selected) {
+      const lockedObj = cityPositions.find((c) => c.name === lockedCity);
+      if (lockedObj) selectCity(lockedObj);
+    } else if (!hand.isFist && !hand.isOk && selected) {
       setSelected(null);
+      setLockedCity(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hand, gestureMode]);
+  }, [hand, gestureMode, lockedCity]);
 
   return (
     <>
@@ -177,30 +186,45 @@ export default function ChinaMap() {
             20 个城市，11 个省份
           </p>
 
-          {/* 3D perspective wrapper — gives the map depth */}
+          {/* 3D perspective wrapper — space-station holographic feel */}
           <div
             className="relative w-full"
             style={{
-              perspective: "1400px",
-              perspectiveOrigin: "50% 40%",
+              perspective: "900px",
+              perspectiveOrigin: "50% 35%",
             }}
           >
           {/* Map container */}
           <div
             ref={mapRef}
-            className="relative w-full rounded-2xl overflow-hidden transition-transform duration-200 ease-out"
+            className="relative w-full rounded-2xl overflow-hidden transition-transform duration-150 ease-out"
             style={{
-              background: "linear-gradient(145deg, #0d1117 0%, #161b22 50%, #0d1117 100%)",
+              background:
+                "radial-gradient(ellipse at 50% 30%, #1a2330 0%, #0d1117 60%, #05070b 100%)",
               boxShadow:
-                "0 30px 60px rgba(0,0,0,0.5), 0 0 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)",
-              // Base 3D tilt for depth; hand movement adds dynamic tilt on top
+                "0 40px 80px rgba(0,0,0,0.6), 0 0 100px rgba(64,128,200,0.08), inset 0 1px 0 rgba(255,255,255,0.04)",
+              // Stronger 3D tilt + dynamic hand response for holographic feel
               transform:
                 gestureMode === "camera" && hand
-                  ? `rotateX(${12 - hand.y * 18}deg) rotateY(${(hand.x - 0.5) * 14}deg)`
-                  : "rotateX(8deg)",
+                  ? `rotateX(${18 - hand.y * 28}deg) rotateY(${(hand.x - 0.5) * 22}deg) scale(${hand.isFist ? 1.02 : 1})`
+                  : "rotateX(14deg)",
               transformStyle: "preserve-3d",
             }}
           >
+            {/* Scan line overlay — slow horizontal sweep for holographic vibe */}
+            {gestureMode === "camera" && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background:
+                    "linear-gradient(transparent 0%, rgba(100,180,255,0.06) 49%, rgba(100,180,255,0.12) 50%, rgba(100,180,255,0.06) 51%, transparent 100%)",
+                  backgroundSize: "100% 200%",
+                  animation: "mapScan 4s linear infinite",
+                  zIndex: 2,
+                  mixBlendMode: "screen",
+                }}
+              />
+            )}
             {/* Gesture opt-in prompt */}
             {mounted && gestureMode === "none" && (
               <MapGesturePrompt
@@ -293,11 +317,13 @@ export default function ChinaMap() {
                   style={{
                     left: `${hand.x * 100}%`,
                     top: `${hand.y * 100}%`,
-                    width: hand.isFist ? 80 : 56,
-                    height: hand.isFist ? 80 : 56,
+                    width: hand.isFist ? 90 : hand.isOk ? 70 : 56,
+                    height: hand.isFist ? 90 : hand.isOk ? 70 : 56,
                     transform: "translate(-50%, -50%)",
                     background: hand.isFist
-                      ? "radial-gradient(circle, rgba(255,180,100,0.7) 0%, rgba(255,180,100,0.1) 50%, transparent 70%)"
+                      ? "radial-gradient(circle, rgba(255,180,100,0.75) 0%, rgba(255,180,100,0.1) 50%, transparent 70%)"
+                      : hand.isOk
+                      ? "radial-gradient(circle, rgba(120,255,180,0.6) 0%, rgba(120,255,180,0.1) 55%, transparent 75%)"
                       : "radial-gradient(circle, rgba(255,230,180,0.5) 0%, rgba(255,230,180,0.1) 60%, transparent 80%)",
                     zIndex: 4,
                     mixBlendMode: "screen",
@@ -313,9 +339,15 @@ export default function ChinaMap() {
                     height: 8,
                     transform: "translate(-50%, -50%)",
                     borderRadius: "50%",
-                    background: hand.isFist ? "#ffb464" : "#ffe6b4",
+                    background: hand.isFist
+                      ? "#ffb464"
+                      : hand.isOk
+                      ? "#78ffb4"
+                      : "#ffe6b4",
                     boxShadow: hand.isFist
                       ? "0 0 12px rgba(255,180,100,0.9)"
+                      : hand.isOk
+                      ? "0 0 12px rgba(120,255,180,0.9)"
                       : "0 0 8px rgba(255,230,180,0.7)",
                     zIndex: 5,
                   }}
@@ -323,23 +355,54 @@ export default function ChinaMap() {
               </>
             )}
 
+            {/* Locked city marker — pulsing ring around the selected city */}
+            {gestureMode === "camera" &&
+              handStatus === "running" &&
+              lockedCity &&
+              (() => {
+                const city = cityPositions.find((c) => c.name === lockedCity);
+                if (!city) return null;
+                const leftPct = ((city.pos.x - VIEW_X) / VIEW_W) * 100;
+                const topPct = ((city.pos.y - VIEW_Y) / VIEW_H) * 100;
+                return (
+                  <div
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${leftPct}%`,
+                      top: `${topPct}%`,
+                      width: 60,
+                      height: 60,
+                      transform: "translate(-50%, -50%)",
+                      borderRadius: "50%",
+                      border: "2px solid rgba(120,255,180,0.8)",
+                      boxShadow:
+                        "0 0 20px rgba(120,255,180,0.5), inset 0 0 12px rgba(120,255,180,0.3)",
+                      animation: "flashlightPulse 1.4s ease-in-out infinite",
+                      zIndex: 4,
+                    }}
+                  />
+                );
+              })()}
+
             {/* Camera mode instruction bar at bottom */}
             {gestureMode === "camera" && handStatus === "running" && (
               <div
                 className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[6] px-4 py-2 rounded-full font-sans text-xs tracking-wide pointer-events-none"
                 style={{
-                  background: "rgba(0,0,0,0.65)",
-                  backdropFilter: "blur(4px)",
+                  background: "rgba(0,0,0,0.7)",
+                  backdropFilter: "blur(6px)",
                   color: "#fff",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255,255,255,0.12)",
                 }}
               >
                 {!hand
                   ? "举起手掌，对准摄像头"
+                  : selected
+                  ? "松开手掌关闭"
+                  : lockedCity
+                  ? `握拳查看「${lockedCity}」的照片`
                   : hoveredCity
-                  ? hand.isFist
-                    ? `松开拳头关闭 · 当前：${hoveredCity}`
-                    : `握拳查看「${hoveredCity}」的照片`
+                  ? `👌 OK 手势确认「${hoveredCity}」`
                   : "移动手掌，对准一个城市"}
               </div>
             )}

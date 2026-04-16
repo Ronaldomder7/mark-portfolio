@@ -11,6 +11,7 @@ export interface HandState {
   x: number; // 0..1 normalized x of palm center (MIRRORED: left in real life = left on screen)
   y: number; // 0..1 normalized y of palm center
   isFist: boolean;
+  isOk: boolean; // thumb tip touching index tip
 }
 
 export type HandTrackingStatus =
@@ -97,9 +98,19 @@ export function useHandTracking(enabled: boolean): UseHandTrackingResult {
                   (sum, t) => sum + Math.hypot(t.x - wrist.x, t.y - wrist.y),
                   0
                 ) / tips.length;
-              // More forgiving fist threshold — 0.18 catches partial curl too
               const isFist = avgDist < 0.18;
-              setHand({ x: 1 - palm.x, y: palm.y, isFist });
+
+              // OK gesture: thumb tip (4) pinched to index tip (8),
+              // while middle/ring/pinky are still extended (not fist).
+              const thumbTip = landmarks[4];
+              const indexTip = landmarks[8];
+              const pinchDist = Math.hypot(
+                thumbTip.x - indexTip.x,
+                thumbTip.y - indexTip.y
+              );
+              const isOk = !isFist && pinchDist < 0.06;
+
+              setHand({ x: 1 - palm.x, y: palm.y, isFist, isOk });
             } else {
               setHand(null);
             }
