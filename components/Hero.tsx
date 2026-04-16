@@ -3,16 +3,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import staticContent from "@/content/static.json";
 import type { StaticContent } from "@/lib/types";
-import {
-  calculateCoverage,
-  isRevealed,
-  type Circle,
-} from "@/lib/flashlightReveal";
+import { type Circle } from "@/lib/flashlightReveal";
 
 const content = staticContent as StaticContent;
 
 const RADIUS = 60;
-const THRESHOLD = 0.65;
+// No coverage threshold — reveal triggers on pointer release
 const MAX_POINTS = 800;
 const NIGHT_COLOR = "#0a0a0a";
 
@@ -57,7 +53,6 @@ export default function Hero() {
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0); // 0..1
 
   // Track the current transform purely in a ref — no React state, no
   // framer-motion, no re-render churn. The DOM element is always the
@@ -151,50 +146,6 @@ export default function Hero() {
     if (now - lastMaskUpdateRef.current > 50) {
       lastMaskUpdateRef.current = now;
       rebuildMask();
-
-      // Calculate coverage over the TEXT area only (not the whole Hero).
-      // The 3 text lines sit roughly in the middle 60% of the width and
-      // 30% of the height — use that bounding box so the user doesn't
-      // have to scan the entire empty Hero to hit the threshold.
-      const textW = rect.width * 0.6;
-      const textH = rect.height * 0.3;
-      const textOffX = rect.width * 0.2; // 20% from left
-      const textOffY = rect.height * 0.25; // 25% from top
-      // Shift scan points into text-relative coordinates
-      const textPoints = visitedPointsRef.current
-        .filter(
-          (p) =>
-            p.x >= textOffX &&
-            p.x <= textOffX + textW &&
-            p.y >= textOffY &&
-            p.y <= textOffY + textH
-        )
-        .map((p) => ({
-          x: p.x - textOffX,
-          y: p.y - textOffY,
-          r: p.r,
-        }));
-      const cov = calculateCoverage(textPoints, textW, textH);
-      setScanProgress(Math.min(1, cov / THRESHOLD));
-      console.log("[flash] coverage:", (cov * 100).toFixed(1) + "% threshold:", (THRESHOLD * 100) + "%");
-      if (isRevealed(cov, THRESHOLD)) {
-        setRevealed(true);
-        setDragging(false);
-        setFlashPos(null);
-        // Tear down the drag entirely — release pointer capture so
-        // nothing claims ownership of the element for the reset.
-        const d = dragRef.current;
-        if (d && flashRef.current) {
-          try {
-            flashRef.current.releasePointerCapture(d.pointerId);
-          } catch {
-            // ignore
-          }
-        }
-        dragRef.current = null;
-        window.dispatchEvent(new Event("avatar:resume"));
-        void endReveal();
-      }
     }
   }
 
@@ -236,11 +187,20 @@ export default function Hero() {
       // ignore
     }
     dragRef.current = null;
-    const cur = currentTransformRef.current;
-    writeTransform({ ...cur, scale: 1 }, 150);
-    setDragging(false);
-    setFlashPos(null);
-    if (!revealed) {
+
+    // Any scanning happened? If so, trigger the full reveal sequence.
+    const didScan = visitedPointsRef.current.length > 0;
+    if (didScan && !revealed && !completed) {
+      setRevealed(true);
+      setDragging(false);
+      setFlashPos(null);
+      window.dispatchEvent(new Event("avatar:resume"));
+      void endReveal();
+    } else {
+      const cur = currentTransformRef.current;
+      writeTransform({ ...cur, scale: 1 }, 150);
+      setDragging(false);
+      setFlashPos(null);
       window.dispatchEvent(new Event("avatar:resume"));
     }
   }
@@ -374,23 +334,6 @@ export default function Hero() {
         />
       )}
 
-      {/* Scan progress bar — only during active drag, fades when done */}
-      {dragging && scanProgress > 0 && scanProgress < 1 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[5] pointer-events-none">
-          <div
-            className="w-40 h-1 rounded-full overflow-hidden"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-          >
-            <div
-              className="h-full rounded-full transition-all duration-200"
-              style={{
-                width: `${scanProgress * 100}%`,
-                background: "rgba(255,230,180,0.7)",
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       <div
         className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[4]"
