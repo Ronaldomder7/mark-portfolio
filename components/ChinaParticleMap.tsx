@@ -9,6 +9,7 @@ import {
 } from "react";
 import Image from "next/image";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import cities from "@/content/cities.json";
 import { CHINA_PROVINCES } from "@/lib/china-map-data";
@@ -119,6 +120,7 @@ interface ParticleFieldProps {
   glowTexture: THREE.Texture;
   handWorldRef: React.MutableRefObject<THREE.Vector3 | null>;
   pointSize: number;
+  interactive: boolean; // false = static (mouse mode), true = physics (camera mode)
 }
 
 function ParticleField({
@@ -127,6 +129,7 @@ function ParticleField({
   glowTexture,
   handWorldRef,
   pointSize,
+  interactive,
 }: ParticleFieldProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const currentPositions = useMemo(
@@ -139,6 +142,7 @@ function ParticleField({
   );
 
   useFrame((_, delta) => {
+    if (!interactive) return; // static mode: don't update positions at all
     const pts = pointsRef.current;
     if (!pts) return;
     const posAttr = pts.geometry.attributes.position as THREE.BufferAttribute;
@@ -153,7 +157,7 @@ function ParticleField({
     const REPULSE_STRENGTH = 6.5;
     const SPRING = 3.5;
     const DAMPING = 0.88;
-    const dt = Math.min(delta, 0.033); // clamp for stability
+    const dt = Math.min(delta, 0.033);
 
     for (let i = 0; i < n; i++) {
       const ix = i * 3;
@@ -323,12 +327,11 @@ function Scene({
   useFrame((_, delta) => {
     if (!mapGroupRef.current) return;
 
-    // Hand → 3D world position (for repulsion)
+    // Hand → 3D world position (for repulsion) — only in camera mode
     if (gestureMode === "camera" && hand) {
       const ndcX = hand.x * 2 - 1;
       const ndcY = -(hand.y * 2 - 1);
       const v = new THREE.Vector3(ndcX, ndcY, 0.4).unproject(camera);
-      // Convert from world to map-group-local space
       const inverse = mapGroupRef.current.matrixWorld.clone().invert();
       v.applyMatrix4(inverse);
       handWorldRef.current = v;
@@ -336,10 +339,23 @@ function Scene({
       handWorldRef.current = null;
     }
 
-    // Auto-rotation + parallax tilt based on hand
+    // In MOUSE MODE: map stays completely static — no rotation, no float,
+    // no camera drift. Only city pulse animates.
+    if (gestureMode !== "camera") {
+      mapGroupRef.current.rotation.set(0, 0, 0);
+      mapGroupRef.current.position.set(0, 0, 0);
+      if (camera.position.x !== 0 || camera.position.y !== 0) {
+        camera.position.x += (0 - camera.position.x) * 0.1;
+        camera.position.y += (0 - camera.position.y) * 0.1;
+        camera.lookAt(0, 0, 0);
+      }
+      return;
+    }
+
+    // CAMERA MODE: full animation
     const baseSpin = delta * 0.06;
     mapGroupRef.current.rotation.y += baseSpin;
-    if (gestureMode === "camera" && hand) {
+    if (hand) {
       const targetTiltX = (hand.y - 0.5) * 0.35 - 0.15;
       const targetTiltZ = (hand.x - 0.5) * 0.08;
       mapGroupRef.current.rotation.x +=
@@ -351,12 +367,10 @@ function Scene({
         (-0.12 - mapGroupRef.current.rotation.x) * 0.05;
     }
 
-    // Breathing float
     const t = performance.now() * 0.0004;
     mapGroupRef.current.position.y = Math.sin(t) * 0.08;
 
-    // Camera parallax
-    if (gestureMode === "camera" && hand) {
+    if (hand) {
       const camOffsetX = (hand.x - 0.5) * 0.6;
       const camOffsetY = -(hand.y - 0.5) * 0.4;
       camera.position.x += (camOffsetX - camera.position.x) * 0.05;
@@ -401,22 +415,25 @@ function Scene({
           colors={fillColors}
           glowTexture={glowTexture}
           handWorldRef={handWorldRef}
-          pointSize={0.14}
+          pointSize={0.08}
+          interactive={gestureMode === "camera"}
         />
         <ParticleField
           restPositions={borderPositions}
           colors={borderColors}
           glowTexture={glowTexture}
           handWorldRef={handWorldRef}
-          pointSize={0.2}
+          pointSize={0.12}
+          interactive={gestureMode === "camera"}
         />
 
-        {/* Cities — amber pulsing spheres */}
+        {/* Cities — amber glowing sprites */}
         {cityWorlds.map(({ city, world }) => (
           <CitySphere
             key={city.name}
             world={world}
             isLocked={lockedCity === city.name}
+            animated={gestureMode === "camera"}
             glowTexture={glowTexture}
           />
         ))}
@@ -431,31 +448,33 @@ function Scene({
 function CitySphere({
   world,
   isLocked,
+  animated,
   glowTexture,
 }: {
   world: THREE.Vector3;
   isLocked: boolean;
+  animated: boolean;
   glowTexture: THREE.Texture;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   useFrame(() => {
     if (!groupRef.current) return;
+    if (!animated) {
+      groupRef.current.scale.setScalar(isLocked ? 1.4 : 1);
+      return;
+    }
     const t = performance.now() * 0.001;
     const pulse = 1 + Math.sin(t * 2) * 0.12;
     groupRef.current.scale.setScalar(isLocked ? 1.6 * pulse : pulse);
   });
   return (
     <group ref={groupRef} position={world}>
-      <mesh>
-        <sphereGeometry args={[0.07, 16, 16]} />
-        <meshBasicMaterial color={isLocked ? "#ffd68a" : "#ff9960"} />
-      </mesh>
-      <sprite scale={[0.5, 0.5, 0.5]}>
+      <sprite scale={[0.35, 0.35, 0.35]}>
         <spriteMaterial
           map={glowTexture}
           color={isLocked ? "#ffd68a" : "#ffb070"}
           transparent
-          opacity={0.9}
+          opacity={1}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
         />
@@ -667,6 +686,17 @@ export default function ChinaParticleMap() {
                   hoveredCityRef={hoveredCityRef}
                   onHoverChange={setHoveredCity}
                 />
+                {/* Real bloom post-processing for premium glow — the
+                    single most impactful visual upgrade. */}
+                <EffectComposer>
+                  <Bloom
+                    intensity={1.2}
+                    luminanceThreshold={0.15}
+                    luminanceSmoothing={0.8}
+                    mipmapBlur
+                    radius={0.85}
+                  />
+                </EffectComposer>
               </Canvas>
             )}
 
