@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import staticContent from "@/content/static.json";
 import type { StaticContent } from "@/lib/types";
-import { type Circle } from "@/lib/flashlightReveal";
+import {
+  calculateCoverage,
+  type Circle,
+} from "@/lib/flashlightReveal";
 
 const content = staticContent as StaticContent;
 
 const RADIUS = 60;
-// No coverage threshold — reveal triggers on pointer release
+const FULL_REVEAL_THRESHOLD = 0.9; // 90% of text area = full reveal + completed
 const MAX_POINTS = 800;
 const NIGHT_COLOR = "#0a0a0a";
 
@@ -53,6 +56,7 @@ export default function Hero() {
   const [revealed, setRevealed] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
 
   // Track the current transform purely in a ref — no React state, no
   // framer-motion, no re-render churn. The DOM element is always the
@@ -146,6 +150,23 @@ export default function Hero() {
     if (now - lastMaskUpdateRef.current > 50) {
       lastMaskUpdateRef.current = now;
       rebuildMask();
+
+      // Update progress based on text area coverage
+      const textW = rect.width * 0.6;
+      const textH = rect.height * 0.3;
+      const textOffX = rect.width * 0.2;
+      const textOffY = rect.height * 0.25;
+      const textPoints = visitedPointsRef.current
+        .filter(
+          (p) =>
+            p.x >= textOffX &&
+            p.x <= textOffX + textW &&
+            p.y >= textOffY &&
+            p.y <= textOffY + textH
+        )
+        .map((p) => ({ x: p.x - textOffX, y: p.y - textOffY, r: p.r }));
+      const cov = calculateCoverage(textPoints, textW, textH);
+      setScanProgress(Math.min(1, cov / FULL_REVEAL_THRESHOLD));
     }
   }
 
@@ -188,78 +209,70 @@ export default function Hero() {
     }
     dragRef.current = null;
 
-    // Any scanning happened? If so, trigger the full reveal sequence.
     const didScan = visitedPointsRef.current.length > 0;
-    if (didScan && !revealed && !completed) {
-      setRevealed(true);
-      setDragging(false);
-      setFlashPos(null);
-      window.dispatchEvent(new Event("avatar:resume"));
-      void endReveal();
-    } else {
+    if (!didScan || revealed || completed) {
       const cur = currentTransformRef.current;
       writeTransform({ ...cur, scale: 1 }, 150);
       setDragging(false);
       setFlashPos(null);
       window.dispatchEvent(new Event("avatar:resume"));
+      return;
+    }
+
+    // Check if user scanned enough for full reveal
+    const isFullReveal = scanProgress >= 1;
+    setRevealed(true);
+    setDragging(false);
+    setFlashPos(null);
+    window.dispatchEvent(new Event("avatar:resume"));
+
+    if (isFullReveal) {
+      // Full reveal: show all big text → drop → reset → extinguish
+      void endReveal(true);
+    } else {
+      // Partial: show what was scanned for 1.5s → fade back → reset flashlight (keep halo)
+      void endReveal(false);
     }
   }
 
-  async function endReveal() {
-    console.log("[flash] endReveal START");
+  async function endReveal(isComplete: boolean) {
     try {
+      // Show scanned text (or full text) on dark bg for 1.5s
       await new Promise((r) => setTimeout(r, 1500));
-      console.log("[flash] 1.5s wait done, setting fadeOut");
+
+      // Fade out
       setFadeOut(true);
       await new Promise((r) => setTimeout(r, 900));
-      console.log("[flash] fadeOut done, starting drop");
 
+      // Drop flashlight
       const cur = currentTransformRef.current;
-      console.log("[flash] current transform:", JSON.stringify(cur));
-
-      const el = flashRef.current;
-      console.log("[flash] flashRef.current exists:", !!el);
-      if (el) {
-        console.log("[flash] element style BEFORE drop:", el.getAttribute("style"));
-      }
-
-      // Drop — pitch down + rotate + dim
       await animateTo(
-        {
-          x: cur.x,
-          y: cur.y + 140,
-          rotate: 28,
-          opacity: 0.55,
-          scale: 1,
-        },
+        { x: cur.x, y: cur.y + 140, rotate: 28, opacity: 0.55, scale: 1 },
         550
       );
-      console.log("[flash] drop done");
-      if (el) {
-        console.log("[flash] element style AFTER drop:", el.getAttribute("style"));
-      }
-
       await new Promise((r) => setTimeout(r, 200));
 
       // Reset to origin
-      console.log("[flash] starting reset to origin");
       await animateTo(ORIGIN, 450);
-      console.log("[flash] reset done");
-      if (el) {
-        console.log("[flash] element style AFTER reset:", el.getAttribute("style"));
-      }
 
+      // Clean up
       setRevealed(false);
       setFadeOut(false);
       setDragging(false);
       setFlashPos(null);
       visitedPointsRef.current = [];
       setMaskUrl("");
-      setCompleted(true);
-      console.log("[flash] endReveal COMPLETE, completed=true");
+      setScanProgress(0);
+
+      if (isComplete) {
+        // Full reveal achieved: extinguish halo, disable drag
+        setCompleted(true);
+      }
+      // If partial: flashlight is back at origin with halo still active — user can try again
+
       window.dispatchEvent(new Event("avatar:resume"));
     } catch (err) {
-      console.error("[flash] endReveal ERROR:", err);
+      console.error("[flash] endReveal error:", err);
     }
   }
 
@@ -335,13 +348,52 @@ export default function Hero() {
       )}
 
 
+      {/* Progress bar during drag */}
+      {dragging && scanProgress > 0 && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[5] pointer-events-none flex flex-col items-center gap-1">
+          <div
+            className="w-40 h-1 rounded-full overflow-hidden"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-200"
+              style={{
+                width: `${Math.min(100, scanProgress * 100)}%`,
+                background:
+                  scanProgress >= 1
+                    ? "rgba(120,255,180,0.8)"
+                    : "rgba(255,230,180,0.7)",
+              }}
+            />
+          </div>
+          {scanProgress >= 1 && (
+            <span
+              className="font-sans text-[10px] tracking-widest"
+              style={{ color: "rgba(120,255,180,0.8)" }}
+            >
+              松手揭晓
+            </span>
+          )}
+        </div>
+      )}
+
       <div
         className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[4]"
         style={{
+          // Full reveal (scanProgress >= 1): remove mask → show ALL big text
+          // Partial: keep mask → only show scanned areas
           WebkitMaskImage:
-            revealed && !fadeOut ? "none" : maskUrl ? `url(${maskUrl})` : "none",
+            revealed && !fadeOut && scanProgress >= 1
+              ? "none"
+              : maskUrl
+              ? `url(${maskUrl})`
+              : "none",
           maskImage:
-            revealed && !fadeOut ? "none" : maskUrl ? `url(${maskUrl})` : "none",
+            revealed && !fadeOut && scanProgress >= 1
+              ? "none"
+              : maskUrl
+              ? `url(${maskUrl})`
+              : "none",
           WebkitMaskSize: "100% 100%",
           maskSize: "100% 100%",
           opacity:
