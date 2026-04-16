@@ -6,7 +6,7 @@ import Beliefs from "@/components/Beliefs";
 import Thoughts from "@/components/Thoughts";
 import SystemCard from "@/components/SystemCard";
 import Timeline from "@/components/Timeline";
-import ChinaMap from "@/components/ChinaMap";
+import ChinaMap from "@/components/ChinaParticleMap";
 import RecentThinking from "@/components/RecentThinking";
 import Guestbook from "@/components/Guestbook";
 import Footer from "@/components/Footer";
