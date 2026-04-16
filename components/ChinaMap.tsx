@@ -121,6 +121,17 @@ export default function ChinaMap() {
     if (hoveredCity) setBurstId((b) => b + 1);
   }, [hoveredCity]);
 
+  // Preload the first photo of each city so the gallery opens instantly
+  // when the user makes a fist — eliminates the "nothing happens for a while"
+  // feeling Mark reported in camera mode.
+  useEffect(() => {
+    if (!mounted) return;
+    typedCities.forEach((c) => {
+      const img = document.createElement("img");
+      img.src = `/cities/${c.name}_1.jpg`;
+    });
+  }, [mounted, typedCities]);
+
   // Hand tracking → hovered city + fist gallery control
   useEffect(() => {
     if (gestureMode !== "camera") return;
@@ -166,13 +177,28 @@ export default function ChinaMap() {
             20 个城市，11 个省份
           </p>
 
+          {/* 3D perspective wrapper — gives the map depth */}
+          <div
+            className="relative w-full"
+            style={{
+              perspective: "1400px",
+              perspectiveOrigin: "50% 40%",
+            }}
+          >
           {/* Map container */}
           <div
             ref={mapRef}
-            className="relative w-full rounded-2xl overflow-hidden"
+            className="relative w-full rounded-2xl overflow-hidden transition-transform duration-200 ease-out"
             style={{
               background: "linear-gradient(145deg, #0d1117 0%, #161b22 50%, #0d1117 100%)",
-              boxShadow: "0 0 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)",
+              boxShadow:
+                "0 30px 60px rgba(0,0,0,0.5), 0 0 60px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)",
+              // Base 3D tilt for depth; hand movement adds dynamic tilt on top
+              transform:
+                gestureMode === "camera" && hand
+                  ? `rotateX(${12 - hand.y * 18}deg) rotateY(${(hand.x - 0.5) * 14}deg)`
+                  : "rotateX(8deg)",
+              transformStyle: "preserve-3d",
             }}
           >
             {/* Gesture opt-in prompt */}
@@ -543,6 +569,7 @@ export default function ChinaMap() {
                 20 CITIES &middot; 11 PROVINCES
               </p>
             </div>
+          </div>
           </div>
         </div>
       </section>
