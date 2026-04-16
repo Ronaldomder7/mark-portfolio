@@ -258,6 +258,66 @@ export default function ChinaMap() {
               }}
             />
 
+            {/* Camera mode: hand cursor on the map + instruction text */}
+            {gestureMode === "camera" && handStatus === "running" && hand && (
+              <>
+                {/* Glowing cursor following the hand */}
+                <div
+                  className="absolute pointer-events-none transition-all duration-75"
+                  style={{
+                    left: `${hand.x * 100}%`,
+                    top: `${hand.y * 100}%`,
+                    width: hand.isFist ? 80 : 56,
+                    height: hand.isFist ? 80 : 56,
+                    transform: "translate(-50%, -50%)",
+                    background: hand.isFist
+                      ? "radial-gradient(circle, rgba(255,180,100,0.7) 0%, rgba(255,180,100,0.1) 50%, transparent 70%)"
+                      : "radial-gradient(circle, rgba(255,230,180,0.5) 0%, rgba(255,230,180,0.1) 60%, transparent 80%)",
+                    zIndex: 4,
+                    mixBlendMode: "screen",
+                  }}
+                />
+                {/* Pulsing inner dot */}
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: `${hand.x * 100}%`,
+                    top: `${hand.y * 100}%`,
+                    width: 8,
+                    height: 8,
+                    transform: "translate(-50%, -50%)",
+                    borderRadius: "50%",
+                    background: hand.isFist ? "#ffb464" : "#ffe6b4",
+                    boxShadow: hand.isFist
+                      ? "0 0 12px rgba(255,180,100,0.9)"
+                      : "0 0 8px rgba(255,230,180,0.7)",
+                    zIndex: 5,
+                  }}
+                />
+              </>
+            )}
+
+            {/* Camera mode instruction bar at bottom */}
+            {gestureMode === "camera" && handStatus === "running" && (
+              <div
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[6] px-4 py-2 rounded-full font-sans text-xs tracking-wide pointer-events-none"
+                style={{
+                  background: "rgba(0,0,0,0.65)",
+                  backdropFilter: "blur(4px)",
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
+                {!hand
+                  ? "举起手掌，对准摄像头"
+                  : hoveredCity
+                  ? hand.isFist
+                    ? `松开拳头关闭 · 当前：${hoveredCity}`
+                    : `握拳查看「${hoveredCity}」的照片`
+                  : "移动手掌，对准一个城市"}
+              </div>
+            )}
+
             {/* Main SVG: provinces + labels + dots + effects */}
             <svg
               viewBox={`${VIEW_X} ${VIEW_Y} ${VIEW_W} ${VIEW_H}`}
