@@ -12,7 +12,7 @@ import {
 const content = staticContent as StaticContent;
 
 const RADIUS = 60;
-const THRESHOLD = 0.25;
+const THRESHOLD = 0.65;
 const MAX_POINTS = 800;
 const NIGHT_COLOR = "#0a0a0a";
 
